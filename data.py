@@ -16,60 +16,57 @@ class TextDataset(Dataset):
         return len(self.memory)
 
     def __getitem__(self, idx):
-        pdb.set_trace()
+        # pdb.set_trace()
         context_seq = []
         bot_seq = []
         index_seq = []
         gate_seq = []
-        # print("inside get item")
-        # for m in memory[idx]:
+
         m = self.memory[idx]
         context_seq = m[0]
         bot_seq = m[1]
         index_seq = m[2]
         gate_seq = m[3]
-        # print("appended stuff to sequence")
-        
-        # print(context_seq)
+
         new_context_seq = []
         for c in context_seq:
-            # print(c)
             l = []
             for word in c:
-                # print(word, w2i[word])
                 l.append(self.w2i[word])
             new_context_seq.append(l)
-        # print("here")
 
         new_bot_seq = []
         for word in bot_seq.split(' '):
             new_bot_seq.append(self.w2i[word])
         new_bot_seq.append(EOS)
-            # print('there')
         index_seq.append(len(context_seq)-1)
         gate_seq.append(False)
-        # print('hi')
-        # print(new_context_seq)
-        # print(new_bot_seq)
-        # print(index_seq)
-        # print(gate_seq)
         return new_context_seq, new_bot_seq, index_seq, gate_seq
 
 
 def collate_fn(batch):
-    max_len = max([len(x[0]) for x in batch])
-    data = [np.array(x[0]) for x in batch]
+    # print(batch)
+    batch.sort(key = lambda x: -len(x[0]))
+    # print(batch)
+    max_len_context = len(batch[0][0])
+    max_len_target = max([len(x[1]) for x in batch])
+
+    context = [np.array(x[0]) for x in batch]
+    # pdb.set_trace()
     target = [np.array(x[1]) for x in batch]
+    index = [np.array(x[2]) for x in batch]
+    gate = [np.array(x[3]) for x in batch]
 
-    out = np.zeros((len(batch), max_len))
-    out_target = np.zeros((len(batch)))
-    mask = np.zeros((len(batch), max_len))
+    out_context = np.zeros((len(batch), max_len_context, 3))
+    out_target, out_index, out_gate = [np.zeros((len(batch), max_len_target))] * 3
+
     for i, x in enumerate(batch):
-        out[i, 0:len(batch[i][0])] = batch[i][0]
-        mask[i, 0:len(batch[i][0])] = 1.0
-        out_target[i] = batch[i][1]
+        out_context[i, 0:len(batch[i][0]), :] = context[i]
+        out_target[i, 0:len(batch[i][1])] = target[i]
+        out_index[i, 0:len(batch[i][2])] = index[i]
+        out_gate[i, 0:len(batch[i][3])] = gate[i] 
 
-    return torch.from_numpy(out), torch.from_numpy(out_target), torch.from_numpy(mask)
+    return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate)
 
 
 # Functions to read in the corpus
@@ -107,7 +104,7 @@ def read_dataset(string, kb_entries):
             # dialog_idx = 0
 
         elif '\t' not in line:
-            context.extend([[word] for  word in line.split(' ')[1:]])
+            context.append([word for word in line.split(' ')[1:]])
             
             # for word in line.split(' '):
             #     context += word
@@ -158,7 +155,17 @@ def read_test(string):
 kb_entries = find_entities("data/dialog-bAbi-tasks/dialog-babi-kb-all.txt")
 train = list(read_dataset("data/dialog-bAbi-tasks/dialog-babi-task5trn.txt", kb_entries))
 data = TextDataset(train, w2i)
-pdb.set_trace()
+# pdb.set_trace()
+batch_size = 8
+# print('here')
+data_loader = torch.utils.data.DataLoader(dataset=data,
+                                              batch_size=batch_size,
+                                              shuffle=True,
+                                              collate_fn=collate_fn)
+
+for batch in data_loader:
+    pdb.set_trace()
+
 # w2i = defaultdict(lambda: UNK, w2i)
 # dev = list(read_dataset("topicclass_valid.txt"))
 # test = list(read_test("topicclass_test.txt"))
