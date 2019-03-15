@@ -5,17 +5,55 @@ from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
 import pdb 
 
-mem_token_size = 3
+
 
 class TextDataset(Dataset):
-    def __init__(self, x):
-        self.x = x
+    def __init__(self, memory, w2i):
+        self.memory = memory
+        self.w2i = w2i
 
     def __len__(self):
-        return len(self.x)
+        return len(self.memory)
 
     def __getitem__(self, idx):
-        return self.x[idx]
+        pdb.set_trace()
+        context_seq = []
+        bot_seq = []
+        index_seq = []
+        gate_seq = []
+        # print("inside get item")
+        # for m in memory[idx]:
+        m = self.memory[idx]
+        context_seq = m[0]
+        bot_seq = m[1]
+        index_seq = m[2]
+        gate_seq = m[3]
+        # print("appended stuff to sequence")
+        
+        # print(context_seq)
+        new_context_seq = []
+        for c in context_seq:
+            # print(c)
+            l = []
+            for word in c:
+                # print(word, w2i[word])
+                l.append(self.w2i[word])
+            new_context_seq.append(l)
+        # print("here")
+
+        new_bot_seq = []
+        for word in bot_seq.split(' '):
+            new_bot_seq.append(self.w2i[word])
+        new_bot_seq.append(EOS)
+            # print('there')
+        index_seq.append(len(context_seq)-1)
+        gate_seq.append(False)
+        # print('hi')
+        # print(new_context_seq)
+        # print(new_bot_seq)
+        # print(index_seq)
+        # print(gate_seq)
+        return new_context_seq, new_bot_seq, index_seq, gate_seq
 
 
 def collate_fn(batch):
@@ -37,8 +75,9 @@ def collate_fn(batch):
 # Functions to read in the corpus
 w2i = defaultdict(lambda: len(w2i))
 t2i = defaultdict(lambda: len(t2i))
-PAD = w2i["<pad>"]
-UNK = w2i["<unk>"]
+PAD = w2i["<pad>"] #0
+UNK = w2i["<unk>"] #1
+EOS = w2i["<eos>"] #2
 
 
 def find_entities(filename):
@@ -90,7 +129,7 @@ def read_dataset(string, kb_entries):
 
             context_new = context.copy()
 
-            context_new.extend([['$$$$']])
+            context_new.extend([['$$$$']*3])
 
             
 
@@ -118,8 +157,9 @@ def read_test(string):
 # Read in the data
 kb_entries = find_entities("data/dialog-bAbi-tasks/dialog-babi-kb-all.txt")
 train = list(read_dataset("data/dialog-bAbi-tasks/dialog-babi-task5trn.txt", kb_entries))
+data = TextDataset(train, w2i)
 pdb.set_trace()
-w2i = defaultdict(lambda: UNK, w2i)
+# w2i = defaultdict(lambda: UNK, w2i)
 # dev = list(read_dataset("topicclass_valid.txt"))
 # test = list(read_test("topicclass_test.txt"))
 nwords = len(w2i)
