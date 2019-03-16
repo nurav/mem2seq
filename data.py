@@ -51,21 +51,31 @@ def collate_fn(batch):
     max_len_context = len(batch[0][0])
     max_len_target = max([len(x[1]) for x in batch])
 
+    # for x in batch:
+    #     print(x[0],x[1],x[2],x[3])
+    #     pdb.set_trace()
+
     context = [np.array(x[0]) for x in batch]
     # pdb.set_trace()
     target = [np.array(x[1]) for x in batch]
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
+    # print(index[0])
 
     out_context = np.zeros((len(batch), max_len_context, 3))
-    out_target, out_index, out_gate = [np.zeros((len(batch), max_len_target))] * 3
-
+    out_target = np.zeros((len(batch), max_len_target))
+    out_index = np.zeros((len(batch), max_len_target))
+    out_gate = np.zeros((len(batch), max_len_target))
+    # print(out_target[0], out_index[0], out_gate[0])
     for i, x in enumerate(batch):
         out_context[i, 0:len(batch[i][0]), :] = context[i]
         out_target[i, 0:len(batch[i][1])] = target[i]
         out_index[i, 0:len(batch[i][2])] = index[i]
         out_gate[i, 0:len(batch[i][3])] = gate[i] 
 
+    # print(out_index[0], index[0])
+    # print(out_target[0], target[0])
+    # print(out_gate[0], gate[0])
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate)
 
 
@@ -154,8 +164,9 @@ def read_test(string):
 # Read in the data
 kb_entries = find_entities("data/dialog-bAbi-tasks/dialog-babi-kb-all.txt")
 train = list(read_dataset("data/dialog-bAbi-tasks/dialog-babi-task5trn.txt", kb_entries))
+pdb.set_trace()
 data = TextDataset(train, w2i)
-# pdb.set_trace()
+pdb.set_trace()
 batch_size = 8
 # print('here')
 data_loader = torch.utils.data.DataLoader(dataset=data,
