@@ -16,6 +16,8 @@ class TextDataset(Dataset):
         return len(self.memory)
 
     def __getitem__(self, idx):
+        """ performs word to index conversion for every element
+        """
         # pdb.set_trace()
         context_seq = []
         bot_seq = []
@@ -45,37 +47,28 @@ class TextDataset(Dataset):
 
 
 def collate_fn(batch):
-    # print(batch)
+    """ pads the sequences to form tensors
+    """
     batch.sort(key = lambda x: -len(x[0]))
-    # print(batch)
     max_len_context = len(batch[0][0])
     max_len_target = max([len(x[1]) for x in batch])
 
-    # for x in batch:
-    #     print(x[0],x[1],x[2],x[3])
-    #     pdb.set_trace()
-
     context = [np.array(x[0]) for x in batch]
-    # pdb.set_trace()
     target = [np.array(x[1]) for x in batch]
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
-    # print(index[0])
 
     out_context = np.zeros((len(batch), max_len_context, 3))
     out_target = np.zeros((len(batch), max_len_target))
     out_index = np.zeros((len(batch), max_len_target))
     out_gate = np.zeros((len(batch), max_len_target))
-    # print(out_target[0], out_index[0], out_gate[0])
+
     for i, x in enumerate(batch):
         out_context[i, 0:len(batch[i][0]), :] = context[i]
         out_target[i, 0:len(batch[i][1])] = target[i]
         out_index[i, 0:len(batch[i][2])] = index[i]
         out_gate[i, 0:len(batch[i][3])] = gate[i] 
 
-    # print(out_index[0], index[0])
-    # print(out_target[0], target[0])
-    # print(out_gate[0], gate[0])
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate)
 
 
@@ -88,16 +81,25 @@ EOS = w2i["<eos>"] #2
 
 
 def find_entities(filename):
+    """ input: .txt file containing all kb entries
+        output: a list containing all the kb entities (last element of each line in the kb entries)
+    """
     bytez = open(filename, 'rb').read()
     bytez = str(bytez, 'utf-8')
     kb_entries = set()
     for line in bytez.splitlines():
-        if '\t' not in line and len(line)>0:
-            kb_entries.add(line.split(' ')[3])
+        if '\t' in line:
+            kb_entries.add(line.split('\t')[1])
     return(list(kb_entries))
 # Filters (out channels, in_channels)
 
-def read_dataset(string, kb_entries):
+def read_dataset(string, kb_entries): 
+    """ input: .txt file containing dialogues
+        output: a list with elements: context for every line, bot responses, index sequence, gate sequence
+        Context: It is a list of lists, each list corresponds to a word in the context and is of the form [word, '$s', t0]
+        bot response: It is a list of all the bot utterances
+        index sequence: it is a list whose elements are the last occurrence of a word in a bot response in the context
+        gate sequence: it is a list whose element is 1 if a word in bot response is present in context and 0 if absent """
     bytez = open(string, 'rb').read()
     bytez = str(bytez, 'utf-8')
     memory = []
@@ -111,14 +113,10 @@ def read_dataset(string, kb_entries):
             sentinel = []
             idx = []
 
-            # dialog_idx = 0
 
         elif '\t' not in line:
             context.append([word for word in line.split(' ')[1:]])
-            
-            # for word in line.split(' '):
-            #     context += word
-               #w2i[word]
+
         else:
             sentinel = [] # gate
             idx = [] #index
@@ -146,29 +144,17 @@ def read_dataset(string, kb_entries):
 
             time += 1
 
-        # tag, words = line.lower().strip().split("\t")
-        # yield ([w2i[x] for x in words.split(" ")], t2i[tag])
-    # print(memory)
     return memory
 
 
 
-def read_test(string):
-    bytez = open(string, 'rb').read()
-    bytez = str(bytez, 'utf-8')
-    for line in bytez.splitlines():
-        _, words = line.lower().strip().split(" ||| ")
-        yield [w2i[x] for x in words.split(" ")]
 
 
 # Read in the data
-kb_entries = find_entities("data/dialog-bAbi-tasks/dialog-babi-kb-all.txt")
-train = list(read_dataset("data/dialog-bAbi-tasks/dialog-babi-task5trn.txt", kb_entries))
-pdb.set_trace()
+kb_entries = find_entities("data/dialog-bAbI-tasks/dialog-babi-kb-all.txt")
+train = list(read_dataset("data/dialog-bAbI-tasks/dialog-babi-task5-full-dialogs-trn.txt", kb_entries))
 data = TextDataset(train, w2i)
-pdb.set_trace()
 batch_size = 8
-# print('here')
 data_loader = torch.utils.data.DataLoader(dataset=data,
                                               batch_size=batch_size,
                                               shuffle=True,
@@ -187,16 +173,16 @@ ntags = len(t2i)
 """
 Reads 
 """
-def read_task(prefix):
-    for set in ['dev', 'trn']:
-        read_dataset()
+# def read_task(prefix):
+#     for set in ['dev', 'trn']:
+#         read_dataset()
 
-def initialize_dict(path):
-    bytez = open(path, 'rb').read()
-    bytez = str(bytez, 'utf-8')
-    for line in bytez.splitlines():
-        if len(line) == 0:
-            continue
-        words = line.strip().split(" ")[1:]
-        for word in words:
-            w2i
+# def initialize_dict(path):
+#     bytez = open(path, 'rb').read()
+#     bytez = str(bytez, 'utf-8')
+#     for line in bytez.splitlines():
+#         if len(line) == 0:
+#             continue
+#         words = line.strip().split(" ")[1:]
+#         for word in words:
+#             w2i
