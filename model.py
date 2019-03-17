@@ -44,12 +44,12 @@ class Encoder(nn.Module):
         # context = torch.sum(context,2) # batchsize x length
         for h in range(self.hops):
             A = self.A[h](context) # batchsize x length*3 x emb_size
-            A = A.view(size[0],size[1],size[2],emb_size) # batchsize x length x 3 x emb_size
+            A = A.view(size[0],size[1],size[2],self.emb_size) # batchsize x length x 3 x emb_size
             A = torch.sum(A,2) # batchsize x length x emb_size
             attn = self.soft(A*q) # batchsize x length x emb_size
 
             C = self.C[h](context) # batchsize x length*3 x emb_size
-            C = C.view(size[0],size[1],size[2],emb_size) # batchsize x length x 3 x emb_size
+            C = C.view(size[0],size[1],size[2],self.emb_size) # batchsize x length x 3 x emb_size
             C = torch.sum(C,2) # batchsize x length x emb_size
             o = C*attn # batchsize x length x emb_size
             q += o

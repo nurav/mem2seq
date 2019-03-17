@@ -4,7 +4,7 @@ import torch
 from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
 import pdb 
-
+from model import Encoder
 
 
 class TextDataset(Dataset):
@@ -40,7 +40,7 @@ class TextDataset(Dataset):
         new_bot_seq = []
         for word in bot_seq.split(' '):
             new_bot_seq.append(self.w2i[word])
-        new_bot_seq.append(EOS)
+        new_bot_seq.append(self.w2i['<eos>'])
         index_seq.append(len(context_seq)-1)
         gate_seq.append(False)
         return new_context_seq, new_bot_seq, index_seq, gate_seq
@@ -58,7 +58,7 @@ def collate_fn(batch):
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
 
-    out_context = np.zeros((len(batch), max_len_context, 3))
+    out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target))
     out_index = np.zeros((len(batch), max_len_target))
     out_gate = np.zeros((len(batch), max_len_target))
@@ -70,14 +70,6 @@ def collate_fn(batch):
         out_gate[i, 0:len(batch[i][3])] = gate[i] 
 
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate)
-
-
-# Functions to read in the corpus
-w2i = defaultdict(lambda: len(w2i))
-t2i = defaultdict(lambda: len(t2i))
-PAD = w2i["<pad>"] #0
-UNK = w2i["<unk>"] #1
-EOS = w2i["<eos>"] #2
 
 
 def find_entities(filename):
@@ -105,6 +97,13 @@ def read_dataset(string, kb_entries):
     memory = []
     context = []
     time = 1
+    w2i = defaultdict(lambda: len(w2i))
+    t2i = defaultdict(lambda: len(t2i))
+    PAD = w2i["<pad>"] #0
+    UNK = w2i["<unk>"] #1
+    EOS = w2i["<eos>"] #2
+    _ = w2i['$u']
+    _ = w2i['$s']
 
     for line in bytez.splitlines():
         if len(line) == 0:
@@ -115,7 +114,11 @@ def read_dataset(string, kb_entries):
 
 
         elif '\t' not in line:
-            context.append([word for word in line.split(' ')[1:]])
+            temp = [word for word in line.split(' ')[1:]]
+            context.append(temp)
+
+            for w in temp:
+                _ = w2i[w]
 
         else:
             sentinel = [] # gate
@@ -125,6 +128,11 @@ def read_dataset(string, kb_entries):
             user = user.split(' ')[1:] # list of words in user utterance
             
             context.extend([[word,'$u','t'+str(time)] for word in user])
+
+            
+            _ = w2i['t'+str(time)]
+            for w in user:
+                _ = w2i[w]
             
             for word in bot.split(' '):
                 index = [i for i,w in enumerate(context) if w[0] == word]
@@ -142,9 +150,13 @@ def read_dataset(string, kb_entries):
 
             context.extend([[word,'$s','t'+str(time)] for word in bot.split(' ')])
 
-            time += 1
+            for w in bot.split(' '):
+                _ = w2i[w]
 
-    return memory
+            _ = w2i['t'+str(time)]
+            time += 1
+    # pdb.set_trace()
+    return memory, w2i
 
 
 
@@ -152,15 +164,18 @@ def read_dataset(string, kb_entries):
 
 # Read in the data
 kb_entries = find_entities("data/dialog-bAbI-tasks/dialog-babi-kb-all.txt")
-train = list(read_dataset("data/dialog-bAbI-tasks/dialog-babi-task5-full-dialogs-trn.txt", kb_entries))
+train, w2i = list(read_dataset("data/dialog-bAbI-tasks/dialog-babi-task5-full-dialogs-trn.txt", kb_entries))
 data = TextDataset(train, w2i)
 batch_size = 8
 data_loader = torch.utils.data.DataLoader(dataset=data,
                                               batch_size=batch_size,
                                               shuffle=True,
                                               collate_fn=collate_fn)
-
+pdb.set_trace()
+# print(w2i)
+model = Encoder(3, len(w2i)+1, 300)
 for batch in data_loader:
+    model(batch[0])
     pdb.set_trace()
 
 # w2i = defaultdict(lambda: UNK, w2i)
