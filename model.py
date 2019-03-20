@@ -5,12 +5,45 @@ import pdb
 
 
 class Model(nn.Module):
-    def __init__(self):
-        self.encoder = Encoder()
-        self.decoder = Decoder()
+    def __init__(self, hops, nwords, emb_size, gru_size, maxlen, batch_size, w2i):
+        self.hops = hops
+        self.nwords = nwords
+        self.emb_size = emb_size
+        self.gru_size = gru_size
+        self.batch_size = batch_size
+        self.w2i = w2i
 
-    def forward(self, *input):
-        pass
+        self.encoder = Encoder(self.hops, self.nwords, self.emb_size)
+        self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords, self.maxlen, self.batch_size)
+
+        self.optim = torch.optim.Adam(list(self.encoder.parameters()) + list(self.decoder.parameters()))
+        self.cross_entropy = torch.nn.CrossEntropy()
+
+        self.loss = 0
+        self.loss_vocab = 0
+        self.loss_ptr = 0
+        self.acc = 0
+
+    def train(self, context, responses, index, sentinel):
+
+        h = self.encoder(context)
+        y = torch.from_numpy(np.array([w2i["<sos>"]]*self.batch_size))
+        y_len = 0
+
+        loss = 0
+        loss_v = 0
+        loss_ptr = 0
+        while y_len < responses.size(1): # TODO: Add EOS condition
+            h, p_vocab, p_ptr = self.decoder(self.context, h, y)
+            loss_v = self.cross_entropy(p_vocab, responses[:, y_len])
+            loss_ptr = self.cross_entropy(p_ptr, index[:, y_len])
+            loss += loss_v + loss_ptr
+            y_len += 1
+
+        self.optim.zero_grad()
+        loss.backward()
+        self.optim.step()
+
 
 
 class Encoder(nn.Module):

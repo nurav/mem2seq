@@ -102,6 +102,8 @@ def read_dataset(string, kb_entries):
     PAD = w2i["<pad>"] #0
     UNK = w2i["<unk>"] #1
     EOS = w2i["<eos>"] #2
+    SOS = w2i["<sos>"] #3
+
     _ = w2i['$u']
     _ = w2i['$s']
 
@@ -174,6 +176,7 @@ data_loader = torch.utils.data.DataLoader(dataset=data,
 pdb.set_trace()
 # print(w2i)
 model = Encoder(3, len(w2i)+1, 300)
+# dec = Decoder()
 for batch in data_loader:
     model(batch[0])
     pdb.set_trace()
