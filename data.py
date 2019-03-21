@@ -11,45 +11,50 @@ class TextDataset(Dataset):
     def __init__(self, memory, w2i):
         self.memory = memory
         self.w2i = w2i
+        self.preprocess()
+
+    def preprocess(self):
+        """ performs word to index conversion for every element
+                """
+        for idx in range(len(self.memory)):
+            # pdb.set_trace()
+            m = self.memory[idx]
+            context_seq = m[0]
+            bot_seq = m[1]
+            index_seq = m[2]
+            gate_seq = m[3]
+            # print(len(context_seq), len(bot_seq), len(index_seq), len(gate_seq))
+            # print(m)
+            new_context_seq = []
+            for c in context_seq:
+                l = []
+                for word in c:
+                    l.append(self.w2i[word])
+                new_context_seq.append(l)
+
+            new_bot_seq = []
+            for word in bot_seq.split(' '):
+                new_bot_seq.append(self.w2i[word])
+            new_bot_seq.append(self.w2i['<eos>'])
+            index_seq.append(len(context_seq) - 1)
+            gate_seq.append(False)
+            m.append(new_context_seq)
+            m.append(new_bot_seq)
 
     def __len__(self):
-        return len(self.memory)
+        return 500 # len(self.memory)
 
     def __getitem__(self, idx):
-        """ performs word to index conversion for every element
-        """
-        # pdb.set_trace()
-        context_seq = []
-        bot_seq = []
-        index_seq = []
-        gate_seq = []
-
-        m = self.memory[idx]
-        context_seq = m[0]
-        bot_seq = m[1]
-        index_seq = m[2]
-        gate_seq = m[3]
-
-        new_context_seq = []
-        for c in context_seq:
-            l = []
-            for word in c:
-                l.append(self.w2i[word])
-            new_context_seq.append(l)
-
-        new_bot_seq = []
-        for word in bot_seq.split(' '):
-            new_bot_seq.append(self.w2i[word])
-        new_bot_seq.append(self.w2i['<eos>'])
-        index_seq.append(len(context_seq)-1)
-        gate_seq.append(False)
-        return new_context_seq, new_bot_seq, index_seq, gate_seq
+        return self.memory[idx][4], self.memory[idx][5], self.memory[idx][2], self.memory[idx][3]
 
 
 def collate_fn(batch):
     """ pads the sequences to form tensors
     """
     batch.sort(key = lambda x: -len(x[0]))
+    context_lengths = [len(x[0]) for x in batch]
+    target_lengths = [len(x[1]) for x in batch]
+
     max_len_context = len(batch[0][0])
     max_len_target = max([len(x[1]) for x in batch])
 
@@ -69,7 +74,7 @@ def collate_fn(batch):
         out_index[i, 0:len(batch[i][2])] = index[i]
         out_gate[i, 0:len(batch[i][3])] = gate[i] 
 
-    return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate)
+    return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(out_gate), context_lengths, target_lengths
 
 
 def find_entities(filename):
