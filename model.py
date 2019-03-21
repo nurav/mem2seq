@@ -28,7 +28,9 @@ class Model(nn.Module):
         self.encoder = Encoder(self.hops, self.nwords, self.emb_size)
         self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords, self.batch_size)
 
-        self.optim = torch.optim.Adam(list(self.encoder.parameters()) + list(self.decoder.parameters()), lr=0.01)
+        self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr = 0.001)
+        self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+
         self.cross_entropy = masked_cross_entropy
 
         self.loss = 0
@@ -53,6 +55,9 @@ class Model(nn.Module):
         index = index.type(TYPE)
         sentinel = sentinel.type(TYPE)
 
+        self.optim_enc.zero_grad()
+        self.optim_dec.zero_grad()
+
         h = self.encoder(context)
         y = torch.from_numpy(np.array([3]*context.size(0), dtype=int)).type(TYPE)
         y_len = 0
@@ -76,9 +81,10 @@ class Model(nn.Module):
         loss_v = self.cross_entropy(output_vocab, responses, target_lengths)
         loss_ptr = self.cross_entropy(output_ptr, index, target_lengths)
         loss = loss_ptr + loss_v
-        self.optim.zero_grad()
+
         loss.backward()
-        self.optim.step()
+        self.optim_enc.step()
+        self.optim_dec.step()
 
         self.loss += loss.item()
         self.loss_vocab += loss_v.item()
@@ -194,7 +200,7 @@ class Decoder(nn.Module):
         self.soft = torch.nn.Softmax(dim = 1)
         self.lin_vocab = torch.nn.Linear(2*self.emb_size, self.nwords)
 
-    def forward(self, context, h_, y_): # (TODO) : Thinnk about pack padded sequence
+    def forward(self, context, h_, y_): # (TODO) : Think about pack padded sequence
         y_ = self.A[0](y_).unsqueeze(0) # 1 x b x e
 
         _, h = self.gru(y_, h_) # 1 x b x e
