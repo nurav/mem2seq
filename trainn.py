@@ -25,7 +25,7 @@ data = TextDataset(train, w2i)
 batch_size = 8
 data_loader = torch.utils.data.DataLoader(dataset=data,
                                               batch_size=batch_size,
-                                              shuffle=False,
+                                              shuffle=True,
                                               collate_fn=collate_fn)
 # print(w2i)
 model = Model(3, len(w2i), args['emb_size'], args['gru_size'], args['batch_size'], w2i)

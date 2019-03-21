@@ -59,6 +59,7 @@ class Model(nn.Module):
         self.optim_dec.zero_grad()
 
         h = self.encoder(context)
+        self.decoder.load_memory(context)
         y = torch.from_numpy(np.array([3]*context.size(0), dtype=int)).type(TYPE)
         y_len = 0
 
@@ -190,47 +191,49 @@ class Decoder(nn.Module):
         self.gru = torch.nn.GRU(input_size=self.emb_size,
                                 hidden_size=self.gru_size,
                                 num_layers=1)
-        self.A = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
-                                      for h in range(self.hops)])
+        # self.A = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
+        #                               for h in range(self.hops)])
         self.C = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
-                                      for h in range(self.hops)])
+                                      for h in range(self.hops+1)])
 
-        for i in range(self.hops-1):
-            self.C[i].weight = self.A[i+1].weight
+        # for i in range(self.hops-1):
+        #     self.C[i].weight = self.A[i+1].weight
+
         self.soft = torch.nn.Softmax(dim = 1)
         self.lin_vocab = torch.nn.Linear(2*self.emb_size, self.nwords)
+        self.memories = []
+
+    def load_memory(self, context):
+        size = context.size()
+        context = context.permute(1, 0, 2)
+        self.memories = []
+        for hop in range(self.hops):
+            m = self.C[hop](context) # b x l*3 x e
+            m = m.view(size[0], size[1], size[2], self.emb_size) # b x l x 3 x e
+            m = torch.sum(m, 2)  # b x l x e
+            self.memories.append(m)
+            m_ = self.C[hop+1](context) # b x l*3 x e
+            m_ = m_.view(size[0], size[1], size[2], self.emb_size) # b x l x 3 x e
+            m_ = torch.sum(m_, 2)  # b x l x e
+        self.memories.append(m_)
 
     def forward(self, context, h_, y_): # (TODO) : Think about pack padded sequence
-        y_ = self.A[0](y_).unsqueeze(0) # 1 x b x e
+        y_ = self.C[0](y_).unsqueeze(0) # 1 x b x e
 
         _, h = self.gru(y_, h_) # 1 x b x e
         size = context.size()
         context = context.view(size[0], -1) # b x l*3
 
-        q = torch.Tensor().type(TYPE)
-        q.data = h.permute(1,0,2).clone() # b x 1 x e
-        o1 = torch.Tensor()
+        q = [h.squeeze(0)]
+
         for hop in range(self.hops):
-            m = self.A[hop](context) # b x l*3 x e
-            m = m.view(size[0], size[1], size[2], self.emb_size) # b x l x 3 x e
-            m = torch.sum(m, 2)  # b x l x e
-            p = torch.sum(m * q, 2)  # b x l
-            # p = torch.bmm(q,m).squeeze(1)
+            p = torch.sum(self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop]), 2)  # b x l
             attn = torch.nn.functional.softmax(p, 1)  # b x l
 
-            C = self.C[hop](context)  # b x l*3 x e
-            C = C.view(size[0], size[1], size[2], self.emb_size)  # b x l x 3 x e
-            C = torch.sum(C, 2)  # b x l x e
-            # attn = attn.unsqueeze(2).expand(size[0], size[1], self.emb_size) # b x l x e
-            # o = C * attn  # b x l x e
-            # o = torch.sum(o,1) # b x e
-            o = torch.bmm(attn.unsqueeze(1), C).squeeze(1) # b x e
-            q = q + o.unsqueeze(1)
+            o = torch.bmm(attn.unsqueeze(1), self.memories[hop+1]).squeeze(1) # b x e
+            q.append(q[-1] + o)
             if hop == 0:
-                o1.data = o.clone()
-
-        p_vocab = self.soft(self.lin_vocab(torch.cat((h.squeeze(0), o1),1)))
+                p_vocab = self.soft(self.lin_vocab(torch.cat((q[0], o),1)))
 
         p_ptr = attn
-
         return h, p_vocab, p_ptr
