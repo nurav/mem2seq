@@ -59,8 +59,8 @@ def collate_fn(batch):
     gate = [np.array(x[3]) for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
-    out_target = np.zeros((len(batch), max_len_target))
-    out_index = np.zeros((len(batch), max_len_target))
+    out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
+    out_index = np.zeros((len(batch), max_len_target),dtype=np.int64)
     out_gate = np.zeros((len(batch), max_len_target))
 
     for i, x in enumerate(batch):

@@ -28,9 +28,18 @@ data_loader = torch.utils.data.DataLoader(dataset=data,
                                               collate_fn=collate_fn)
 # print(w2i)
 model = Model(3, len(w2i)+1, args['emb_size'], args['gru_size'], args['batch_size'], w2i)
+
+use_cuda = torch.cuda.is_available()
+
+if use_cuda:
+    # TYPE = torch.cuda.LongTensor
+    model.cuda()
+
 # dec = Decoder()
+
 for batch in data_loader:
     model.train(batch[0], batch[1], batch[2], batch[3])
+
 
 
 # w2i = defaultdict(lambda: UNK, w2i)

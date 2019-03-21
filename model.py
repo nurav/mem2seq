@@ -3,6 +3,13 @@ import numpy as np
 
 from torch import nn
 
+TYPE = torch.LongTensor
+use_cuda = torch.cuda.is_available()
+
+if use_cuda:
+    TYPE = torch.cuda.LongTensor
+    # model.cuda()
+
 
 class Model(nn.Module):
     def __init__(self, hops, nwords, emb_size, gru_size, batch_size, w2i):
@@ -27,14 +34,21 @@ class Model(nn.Module):
         self.acc = 0
 
     def train(self, context, responses, index, sentinel):
+        # with torch.autograd.set_detect_anomaly(True):
+        # print(i)
+        context = context.type(TYPE)
+        responses = responses.type(TYPE)
+        index = index.type(TYPE)
+        sentinel = sentinel.type(TYPE)
 
         h = self.encoder(context)
-        y = torch.from_numpy(np.array([3]*self.batch_size, dtype=int)).type(torch.LongTensor)
+        y = torch.from_numpy(np.array([3]*self.batch_size, dtype=int)).type(TYPE)
         y_len = 0
 
         loss = 0
         loss_v = 0
         loss_ptr = 0
+        h = h.unsqueeze(0)
         while y_len < responses.size(1): # TODO: Add EOS condition
             h, p_vocab, p_ptr = self.decoder(context, h, y)
             loss_v = self.cross_entropy(p_vocab, responses[:, y_len])
@@ -42,8 +56,8 @@ class Model(nn.Module):
             loss += loss_v + loss_ptr
 
             y_len += 1
-            y = responses[:, y_len - 1].type(torch.LongTensor)
-
+            y = responses[:, y_len - 1].type(TYPE)
+        print(loss)
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
@@ -55,7 +69,7 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         def init_weights(m):
             if type(m) == torch.nn.Embedding:
-                m.weight.data.fill_(1.0) # intiialize properly!!!
+                m.weight.data=torch.normal(0.0,torch.ones(self.nwords,self.emb_size)*0.1) # (TODO): intiialize properly!!!
 
         self.hops = hops
         self.nwords = nwords
@@ -73,26 +87,27 @@ class Encoder(nn.Module):
         # (TODO): Use pack_padded_sequence
         # context : batchsize x length x 3
         # pdb.set_trace()
-        size = context.size()
-        q = torch.zeros(size[0], self.emb_size) # initialize u # batchsize x length x emb_size
+        size = context.size() # b x l x 3
+        q = torch.zeros(size[0], self.emb_size).type(torch.cuda.FloatTensor) # initialize u # batchsize x length x emb_size
         q_list = [q] 
 
-        context = context.view(size[0],-1) # batchsize x length*3
-        # context = torch.sum(context,2) # batchsize x length
+        context = context.view(size[0],-1) # b x l*3
         for h in range(self.hops):
-            A = self.A[h](context) # batchsize x length*3 x emb_size
-            A = A.view(size[0],size[1],size[2],self.emb_size) # batchsize x length x 3 x emb_size
-            A = torch.sum(A,2) # batchsize x length x emb_size
-            p = torch.sum(A*q.unsqueeze(1), 2) # batchsize x length
-            attn = torch.nn.functional.softmax(p, 1) # batchsize x length
+            m = self.A[h](context) # b x l*3 x e
+            m = m.view(size[0],size[1],size[2],self.emb_size) # b x l x 3 x e
+            m = torch.sum(m,2) # b x l x e
+            p = torch.sum(m*q.unsqueeze(1), 2) # b x l
+            attn = torch.nn.functional.softmax(p, 1) # b x l
 
-            C = self.C[h](context) # batchsize x length*3 x emb_size
-            C = C.view(size[0],size[1],size[2],self.emb_size) # batchsize x length x 3 x emb_size
-            C = torch.sum(C,2) # batchsize x length x emb_size
-            attn = attn.unsqueeze(2).expand(size[0],size[1],self.emb_size)
-            o = C*attn # batchsize x length x emb_size
-            o = torch.sum(o,1) # batchsize x emb_size
-            q += o
+            c = self.C[h](context) # b x l*3 x e
+            c = c.view(size[0],size[1],size[2],self.emb_size) # b x l x 3 x e
+            c = torch.sum(c,2) # b x l x e
+            # attn2 = attn.unsqueeze(2).expand(size[0],size[1],self.emb_size) # b x l x e
+            # o2 = c*attn2 # b x l x e
+            # o2 = torch.sum(o2,1) # b x e
+            o = torch.bmm(attn.unsqueeze(1), c).squeeze(1)
+            # print(torch.all(torch.eq(o, o2)))
+            q = q + o # b x e
         return o
         
 
@@ -114,35 +129,38 @@ class Decoder(nn.Module):
 
         for i in range(self.hops-1):
             self.C[i].weight = self.A[i+1].weight
-        self.soft = torch.nn.Softmax(dim = 2)
+        self.soft = torch.nn.Softmax(dim = 1)
         self.lin_vocab = torch.nn.Linear(2*self.emb_size, self.nwords)
 
     def forward(self, context, h_, y_):
-        y_ = self.A[0](y_).unsqueeze(0)
-        _, h = self.gru(y_, h_.unsqueeze(0)) #(seq_len, batch, input_size)
+        y_ = self.A[0](y_).unsqueeze(0) # 1 x b x e
+        _, h = self.gru(y_, h_) # 1 x b x e
         size = context.size()
-        context = context.view(size[0], -1)
+        context = context.view(size[0], -1) # b x l*3
 
-        q = torch.Tensor()
-        q.data = h.clone()
+        q = torch.Tensor().type(TYPE)
+        q.data = h.permute(1,0,2).clone() # b x 1 x e
         o1 = torch.Tensor()
         for hop in range(self.hops):
-            A = self.A[hop](context)
-            A = A.view(size[0], size[1], size[2], self.emb_size)
-            A = torch.sum(A, 2)  # batchsize x length x emb_size
-            p = torch.sum(A * q.unsqueeze(1), 2)  # batchsize x length
-            attn = torch.nn.functional.softmax(p, 1)  # batchsize x length
+            m = self.A[hop](context) # b x l*3 x e
+            m = m.view(size[0], size[1], size[2], self.emb_size) # b x l x 3 x e
+            m = torch.sum(m, 2)  # b x l x e
+            p = torch.sum(m * q, 2)  # b x l
+            # p = torch.bmm(q,m).squeeze(1)
+            attn = torch.nn.functional.softmax(p, 1)  # b x l
 
-            C = self.C[hop](context)  # batchsize x length*3 x emb_size
-            C = C.view(size[0], size[1], size[2], self.emb_size)  # batchsize x length x 3 x emb_size
-            C = torch.sum(C, 2)  # batchsize x length x emb_size
-            attn = attn.unsqueeze(2).expand(size[0], size[1], self.emb_size)
-            o = C * attn  # batchsize x length x emb_size
-            q += o
+            C = self.C[hop](context)  # b x l*3 x e
+            C = C.view(size[0], size[1], size[2], self.emb_size)  # b x l x 3 x e
+            C = torch.sum(C, 2)  # b x l x e
+            # attn = attn.unsqueeze(2).expand(size[0], size[1], self.emb_size) # b x l x e
+            # o = C * attn  # b x l x e
+            # o = torch.sum(o,1) # b x e
+            o = torch.bmm(attn.unsqueeze(1), C).squeeze(1) # b x e
+            q = q + o.unsqueeze(1)
             if hop == 0:
                 o1.data = o.clone()
 
-        p_vocab = self.soft(self.lin_vocab(torch.cat((h, o1),1)))
+        p_vocab = self.soft(self.lin_vocab(torch.cat((h.squeeze(0), o1),1)))
 
         p_ptr = attn
 
