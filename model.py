@@ -60,11 +60,16 @@ class Model(nn.Module):
 
         # Encoder
         h = self.encoder(context)
-        h_fake = self.encoder.forward_fake(context)
-        print(torch.all(torch.eq(h, h_fake)))
+        # h_fake = self.encoder.forward_fake(context)
+        # print(torch.all(torch.eq(h, h_fake)))
 
         # Load memory
         self.decoder.load_memory(context)
+
+        # self.decoder.load_memory_fake(context)
+
+
+
         y = torch.from_numpy(np.array([2]*context.size(0), dtype=int)).type(TYPE)
         y_len = 0
 
@@ -76,8 +81,15 @@ class Model(nn.Module):
         output_ptr = torch.zeros(max(target_lengths), context.size(0), context.size(1))
 
 
+
         while y_len < responses.size(1): # TODO: Add EOS condition
             h, p_vocab, p_ptr = self.decoder(context, h, y)
+
+            # h_f, p_v_f, p_p_f = self.decoder.forward_fake(y,h)
+            # print(torch.all(torch.eq(h, h_f)))
+            # print(torch.all(torch.eq(p_vocab, p_v_f)))
+            # print(torch.all(torch.eq(p_ptr, p_p_f)))
+
             output_vocab[y_len] = p_vocab
             output_ptr[y_len] = p_ptr
 
@@ -112,7 +124,7 @@ class Model(nn.Module):
         response = response.type(TYPE)
 
         h = self.encoder(context)
-        y = torch.from_numpy(np.array([3] * context.size(0), dtype=int)).type(TYPE)
+        y = torch.from_numpy(np.array([2] * context.size(0), dtype=int)).type(TYPE)
         y_len = 0
 
         loss = 0
@@ -153,6 +165,7 @@ class Encoder(nn.Module):
         def init_weights(m):
             if type(m) == torch.nn.Embedding:
                 m.weight.data=torch.normal(0.0,torch.ones(self.nwords,self.emb_size)*0.1)
+                # m.weight.data.fill_(1.0)
 
         self.hops = hops
         self.nwords = nwords
@@ -187,38 +200,15 @@ class Encoder(nn.Module):
             c = self.C[h+1](context) # b x l*3 x e
             c = c.view(size[0],size[1],size[2],self.emb_size) # b x l x 3 x e
             c = torch.sum(c,2).squeeze(2) # b x l x e
-            attn2 = attn.unsqueeze(2).expand(size[0],size[1],self.emb_size) # b x l x e
-            o2 = c*attn2 # b x l x e
-            o2 = torch.sum(o2,1) # b x e
-            # o = torch.bmm(attn.unsqueeze(1), c).squeeze(1)
+            # attn2 = attn.unsqueeze(2).expand(size[0],size[1],self.emb_size) # b x l x e
+            # o2 = c*attn2 # b x l x e
+            # o2 = torch.sum(o2,1) # b x e
+            o = torch.bmm(attn.unsqueeze(1), c).squeeze(1)
             # print(torch.all(torch.eq(o, o2)))
-            q = q + o2 # b x e
-        return o2
+            # q = q + o2 # b x e
+            q = q + o
+        return q
 
-    def get_state(self, bsz):
-        """Get cell states and hidden states."""
-        return Variable(torch.zeros(bsz, self.emb_size))
-
-    def forward_fake(self, story):
-        # story: context_seq
-        story_size = story.size()  # b * m * 3
-        u = [self.get_state(story.size(0))]  ### tensor of size b x e of all zeros (intializing u)
-        for hop in range(self.hops):
-            embed_A = self.C[hop](story.contiguous().view(story.size(0), -1).long())  # b * (m * s) * e
-            embed_A = embed_A.view(story_size + (embed_A.size(-1),))  # b * m * s * e
-            m_A = torch.sum(embed_A, 2).squeeze(2)  # b * m * e
-
-            u_temp = u[-1].unsqueeze(1).expand_as(m_A)  # b * 1 * e ### u[-1] => using the last u
-            prob = self.soft(torch.sum(m_A * u_temp, 2))  # b * m
-            embed_C = self.C[hop + 1](story.contiguous().view(story.size(0), -1).long())
-            embed_C = embed_C.view(story_size + (embed_C.size(-1),))
-            m_C = torch.sum(embed_C, 2).squeeze(2)  # b * m * e
-
-            prob = prob.unsqueeze(2).expand_as(m_C)  # b * m * 1
-            o_k = torch.sum(m_C * prob, 1)  # b * e
-            u_k = u[-1] + o_k
-            u.append(u_k)
-        return u_k
         
 
 
@@ -232,13 +222,23 @@ class Decoder(nn.Module):
         self.gru = torch.nn.GRU(input_size=self.emb_size,
                                 hidden_size=self.gru_size,
                                 num_layers=1)
+        def init_weights(m):
+            if type(m) == torch.nn.Embedding:
+                m.weight.data=torch.normal(0.0,torch.ones(self.nwords,self.emb_size)*0.1)
+                # m.weight.data.fill_(1.0)
         # self.A = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
         #                               for h in range(self.hops)])
         self.C = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
                                       for h in range(self.hops+1)])
+        self.C.apply(init_weights)
 
+        # self.gru.apply(init_weights)
         # for i in range(self.hops-1):
         #     self.C[i].weight = self.A[i+1].weight
+
+        from torch.nn import init
+        for p in self.gru.parameters():
+            init.constant(p,1.0)
 
         self.soft = torch.nn.Softmax(dim = 1)
         self.lin_vocab = torch.nn.Linear(2*self.emb_size, self.nwords)
@@ -246,8 +246,9 @@ class Decoder(nn.Module):
 
     def load_memory(self, context):
         size = context.size()
-        context = context.permute(1, 0, 2)
+        # context = context.permute(1, 0, 2)
         self.memories = []
+        context = context.view(size[0], -1)  # b x l*3
         for hop in range(self.hops):
             m = self.C[hop](context) # b x l*3 x e
             m = m.view(size[0], size[1], size[2], self.emb_size) # b x l x 3 x e
@@ -269,12 +270,13 @@ class Decoder(nn.Module):
 
         for hop in range(self.hops):
             p = torch.sum(self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop]), 2)  # b x l
-            attn = torch.nn.functional.softmax(p, 1)  # b x l
+            attn = self.soft(p)  # b x l
 
             o = torch.bmm(attn.unsqueeze(1), self.memories[hop+1]).squeeze(1) # b x e
             q.append(q[-1] + o)
             if hop == 0:
-                p_vocab = self.soft(self.lin_vocab(torch.cat((q[0], o),1)))
+                p_vocab = self.lin_vocab(torch.cat((q[0], o),1))
 
         p_ptr = attn
         return h, p_vocab, p_ptr
+
