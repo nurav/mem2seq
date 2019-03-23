@@ -63,10 +63,10 @@ def collate_fn(batch):
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
 
-    out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
-    out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
-    out_index = np.zeros((len(batch), max_len_target), dtype=np.int64)
-    out_gate = np.zeros((len(batch), max_len_target))
+    out_context = np.ones((len(batch), max_len_context, 3), dtype=int)
+    out_target = np.ones((len(batch), max_len_target), dtype=np.int64)
+    out_index = np.ones((len(batch), max_len_target), dtype=np.int64)
+    out_gate = np.ones((len(batch), max_len_target))
 
     for i, x in enumerate(batch):
         out_context[i, 0:len(batch[i][0]), :] = context[i]
@@ -107,13 +107,14 @@ def read_dataset(string, kb_entries):
     time = 1
     w2i = defaultdict(lambda: len(w2i))
     t2i = defaultdict(lambda: len(t2i))
-    PAD = w2i["<pad>"]  # 0
-    UNK = w2i["<unk>"]  # 1
+
+    UNK = w2i["<unk>"]  # 0
+    PAD = w2i["<pad>"]  # 1
     EOS = w2i["<eos>"]  # 2
     SOS = w2i["<sos>"]  # 3
 
-    _ = w2i['$u']
-    _ = w2i['$s']
+    # _ = w2i['$u']
+    # _ = w2i['$s']
 
     for line in bytez.splitlines():
         if len(line) == 0:
@@ -139,9 +140,10 @@ def read_dataset(string, kb_entries):
 
             context.extend([[word, '$u', 't' + str(time)] for word in user])
 
-            _ = w2i['t' + str(time)]
             for w in user:
                 _ = w2i[w]
+                _ = w2i['$u']
+                _ = w2i['t' + str(time)]
 
             for word in bot.split(' '):
                 index = [i for i, w in enumerate(context) if w[0] == word]
@@ -152,6 +154,7 @@ def read_dataset(string, kb_entries):
             context_new = context.copy()
 
             context_new.extend([['$$$$'] * 3])
+            _ = w2i['$$$$']
 
             memory.append([context_new, bot, idx, sentinel])  ##### final output
 
@@ -159,6 +162,8 @@ def read_dataset(string, kb_entries):
 
             for w in bot.split(' '):
                 _ = w2i[w]
+            _ = w2i['$s']
+            _ = w2i['t' + str(time)]
 
             _ = w2i['t' + str(time)]
             time += 1
@@ -166,3 +171,19 @@ def read_dataset(string, kb_entries):
     return memory, w2i
 
 
+"""
+Reads 
+"""
+# def read_task(prefix):
+#     for set in ['dev', 'trn']:
+#         read_dataset()
+
+# def initialize_dict(path):
+#     bytez = open(path, 'rb').read()
+#     bytez = str(bytez, 'utf-8')
+#     for line in bytez.splitlines():
+#         if len(line) == 0:
+#             continue
+#         words = line.strip().split(" ")[1:]
+#         for word in words:
+#             w2i

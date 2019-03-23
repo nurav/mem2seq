@@ -25,7 +25,7 @@ data = TextDataset(train, w2i)
 batch_size = 8
 data_loader = torch.utils.data.DataLoader(dataset=data,
                                               batch_size=batch_size,
-                                              shuffle=True,
+                                              shuffle=False,
                                               collate_fn=collate_fn)
 # print(w2i)
 model = Model(3, len(w2i), args['emb_size'], args['gru_size'], args['batch_size'], w2i)
@@ -42,8 +42,11 @@ if use_cuda:
 for epoch in range(0,100): # (TODO): Change this
     pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     for i, batch in pbar:
-        model.train(batch[0], batch[1], batch[2], batch[3], i==0, batch[4], batch[5]) #(TODO): Fix gate sequence
+        if i == 100:
+            abcd = 0
+        model.train(batch[0], batch[1], batch[2], batch[3], i==0, batch[4], batch[5], 8) #(TODO): Fix gate sequence
         pbar.set_description(model.show_loss())
+
 
 # for batch in data_loader:
 #     model.train(batch[0], batch[1], batch[2], batch[3])

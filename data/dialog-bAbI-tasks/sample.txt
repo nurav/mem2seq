@@ -1,0 +1,41 @@
+1 hello	hello what can i help you with today
+2 i'd like to book a table in bombay for two people	i'm on it
+3 <SILENCE>	any preference on a type of cuisine
+4 with spanish food	which price range are looking for
+5 in a expensive price range please	ok let me look into some options for you
+6 <SILENCE>	api_call spanish bombay two expensive
+7 instead could it be in a moderate price range	sure is there anything else to update
+8 no	ok let me look into some options for you
+9 <SILENCE>	api_call spanish bombay two moderate
+10 resto_bombay_moderate_spanish_1stars R_phone resto_bombay_moderate_spanish_1stars_phone
+11 resto_bombay_moderate_spanish_1stars R_cuisine spanish
+12 resto_bombay_moderate_spanish_1stars R_address resto_bombay_moderate_spanish_1stars_address
+13 resto_bombay_moderate_spanish_1stars R_location bombay
+14 resto_bombay_moderate_spanish_1stars R_number two
+15 resto_bombay_moderate_spanish_1stars R_price moderate
+16 resto_bombay_moderate_spanish_1stars R_rating 1
+17 resto_bombay_moderate_spanish_8stars R_phone resto_bombay_moderate_spanish_8stars_phone
+18 resto_bombay_moderate_spanish_8stars R_cuisine spanish
+19 resto_bombay_moderate_spanish_8stars R_address resto_bombay_moderate_spanish_8stars_address
+20 resto_bombay_moderate_spanish_8stars R_location bombay
+21 resto_bombay_moderate_spanish_8stars R_number two
+22 resto_bombay_moderate_spanish_8stars R_price moderate
+23 resto_bombay_moderate_spanish_8stars R_rating 8
+24 resto_bombay_moderate_spanish_6stars R_phone resto_bombay_moderate_spanish_6stars_phone
+25 resto_bombay_moderate_spanish_6stars R_cuisine spanish
+26 resto_bombay_moderate_spanish_6stars R_address resto_bombay_moderate_spanish_6stars_address
+27 resto_bombay_moderate_spanish_6stars R_location bombay
+28 resto_bombay_moderate_spanish_6stars R_number two
+29 resto_bombay_moderate_spanish_6stars R_price moderate
+30 resto_bombay_moderate_spanish_6stars R_rating 6
+31 <SILENCE>	what do you think of this option: resto_bombay_moderate_spanish_8stars
+32 no this does not work for me	sure let me find an other option for you
+33 <SILENCE>	what do you think of this option: resto_bombay_moderate_spanish_6stars
+34 no i don't like that	sure let me find an other option for you
+35 <SILENCE>	what do you think of this option: resto_bombay_moderate_spanish_1stars
+36 that looks great	great let me do the reservation
+37 may i have the address of the restaurant	here it is resto_bombay_moderate_spanish_1stars_address
+38 do you have its phone number	here it is resto_bombay_moderate_spanish_1stars_phone
+39 thanks	is there anything i can help you with
+40 no thank you	you're welcome
+
