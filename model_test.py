@@ -16,7 +16,6 @@ from torch import optim
 import torch.nn.functional as F
 from masked_cross_entropy import *
 
-USE_CUDA = torch.cuda.is_available()
 
 TYPE = torch.LongTensor
 TYPEF = torch.FloatTensor
@@ -45,8 +44,10 @@ class Model(nn.Module):
         self.encoder = Encoder(hops, nwords, gru_size)
         self.decoder = Decoder(emb_size, hops, gru_size, nwords)
 
-        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
-        self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+        self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
+        self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+
+        self.cross_entropy = torch.nn.CrossEntropyLoss() #masked_cross_entropy
 
         self.loss = 0
         self.ploss = 0
@@ -61,74 +62,142 @@ class Model(nn.Module):
         self.n += 1
         return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
 
-    def train_batch(self, input_batches, input_lengths, target_batches,
-                    target_lengths, target_index, target_gate, batch_size, clip,
-                    teacher_forcing_ratio, reset):
-        if reset:
+    # def train_batch(self, context, context_lengths, responses,
+    #                 response_lengths, index, sentinel, clip, new_epoch):
+    #     if new_epoch:
+    #         self.loss = 0
+    #         self.ploss = 0
+    #         self.vloss = 0
+    #         self.n = 1
+    #
+    #     self.batch_size = context.size(1)
+    #     self.encoder_optimizer.zero_grad()
+    #     self.decoder_optimizer.zero_grad()
+    #
+    #
+    #     loss_Vocab, ploss = 0, 0
+    #
+    #     # Run words through encoder
+    #     h = self.encoder(context.transpose(0,1)).unsqueeze(0)
+    #
+    #     self.decoder.load_memory(context.transpose(0, 1))
+    #
+    #     # Prepare input and output variables
+    #     decoder_input = Variable(torch.LongTensor([2] * self.batch_size))
+    #
+    #     max_target_length = max(response_lengths)
+    #     all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, self.batch_size, self.nwords))
+    #     all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, self.batch_size, context.size(0)))
+    #
+    #     # Move new Variables to CUDA
+    #     if use_cuda:
+    #         all_decoder_outputs_vocab = all_decoder_outputs_vocab.cuda()
+    #         all_decoder_outputs_ptr = all_decoder_outputs_ptr.cuda()
+    #         decoder_input = decoder_input.cuda()
+    #
+    #
+    #     for t in range(max_target_length):
+    #         decoder_ptr, decoder_vacab, h = self.decoder(context, decoder_input, h)
+    #
+    #         all_decoder_outputs_vocab[t] = decoder_vacab
+    #         all_decoder_outputs_ptr[t] = decoder_ptr
+    #
+    #         decoder_input = responses[t]  # Chosen word is next input
+    #         if use_cuda: decoder_input = decoder_input.cuda()
+    #
+    #     # Loss calculation and backpropagation
+    #     loss_Vocab = masked_cross_entropy(
+    #         all_decoder_outputs_vocab.transpose(0, 1).contiguous(),  # -> batch x seq
+    #         responses.transpose(0, 1).contiguous(),  # -> batch x seq
+    #         response_lengths
+    #     )
+    #     ploss = masked_cross_entropy(
+    #         all_decoder_outputs_ptr.transpose(0, 1).contiguous(),  # -> batch x seq
+    #         index.transpose(0, 1).contiguous(),  # -> batch x seq
+    #         response_lengths
+    #     )
+    #
+    #     loss = loss_Vocab + ploss
+    #     loss.backward()
+    #
+    #     ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
+    #     dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
+    #
+    #
+    #     self.encoder_optimizer.step()
+    #     self.decoder_optimizer.step()
+    #     self.loss += loss.item()
+    #     self.ploss += ploss.item()
+    #     self.vloss += loss_Vocab.item()
+
+    def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads):
+
+        #(TODO): remove transpose
+        if new_epoch: # (TODO): Change this part
             self.loss = 0
             self.ploss = 0
             self.vloss = 0
             self.n = 1
 
-        self.batch_size = input_batches.size(1)
-        self.encoder_optimizer.zero_grad()
-        self.decoder_optimizer.zero_grad()
+        # with torch.autograd.set_detect_anomaly(True):
+        # print(i)
+        context = context.type(TYPE)
+        responses = responses.type(TYPE)
+        index = index.type(TYPE)
+        sentinel = sentinel.type(TYPE)
 
+        self.optim_enc.zero_grad()
+        self.optim_dec.zero_grad()
 
-        loss_Vocab, ploss = 0, 0
+        h = self.encoder(context.transpose(0,1))
+        self.decoder.load_memory(context.transpose(0, 1))
+        y = torch.from_numpy(np.array([2]*context.size(1), dtype=int)).type(TYPE)
+        y_len = 0
 
-        # Run words through encoder
-        decoder_hidden = self.encoder(input_batches.transpose(0,1)).unsqueeze(0)
+        h = h.unsqueeze(0)
+        output_vocab = torch.zeros(max(target_lengths), context.size(1), self.nwords)
+        output_ptr = torch.zeros(max(target_lengths), context.size(1), context.size(0))
+        while y_len < responses.size(0): # TODO: Add EOS condition
+            p_ptr, p_vocab, h = self.decoder(context, y, h)
+            output_vocab[y_len] = p_vocab
+            output_ptr[y_len] = p_ptr
 
-        self.decoder.load_memory(input_batches.transpose(0, 1))
+            y = responses[y_len].type(TYPE)
+            y_len += 1
 
-        # Prepare input and output variables
-        decoder_input = Variable(torch.LongTensor([2] * self.batch_size))
+        # print(loss)
+        mask_v = torch.ones(output_vocab.size())
+        mask_p = torch.ones(output_ptr.size())
 
-        max_target_length = max(target_lengths)
-        all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, self.batch_size, self.nwords))
-        all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, self.batch_size, input_batches.size(0)))
+        for i in range(responses.size(1)):
+            mask_v[target_lengths[i]:,i,:] = 0
+            mask_p[target_lengths[i]:,i,:] = 0
 
-        # Move new Variables to CUDA
-        if USE_CUDA:
-            all_decoder_outputs_vocab = all_decoder_outputs_vocab.cuda()
-            all_decoder_outputs_ptr = all_decoder_outputs_ptr.cuda()
-            decoder_input = decoder_input.cuda()
+        # output_vocab = output_vocab*mask_v
+        # output_ptr = output_ptr*mask_p
 
+        loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords), responses.contiguous().view(-1))
+        loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)), index.contiguous().view(-1))
 
-        for t in range(max_target_length):
-            decoder_ptr, decoder_vacab, decoder_hidden = self.decoder(input_batches, decoder_input, decoder_hidden)
+        loss = loss_ptr + loss_v
 
-            all_decoder_outputs_vocab[t] = decoder_vacab
-            all_decoder_outputs_ptr[t] = decoder_ptr
-
-            decoder_input = target_batches[t]  # Chosen word is next input
-            if USE_CUDA: decoder_input = decoder_input.cuda()
-
-        # Loss calculation and backpropagation
-        loss_Vocab = masked_cross_entropy(
-            all_decoder_outputs_vocab.transpose(0, 1).contiguous(),  # -> batch x seq
-            target_batches.transpose(0, 1).contiguous(),  # -> batch x seq
-            target_lengths
-        )
-        ploss = masked_cross_entropy(
-            all_decoder_outputs_ptr.transpose(0, 1).contiguous(),  # -> batch x seq
-            target_index.transpose(0, 1).contiguous(),  # -> batch x seq
-            target_lengths
-        )
-
-        loss = loss_Vocab + ploss
         loss.backward()
+        self.optim_enc.step()
+        self.optim_dec.step()
 
-        # Clip gradient norms
-        ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
-        dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
-        # Update parameters with optimizers
-        self.encoder_optimizer.step()
-        self.decoder_optimizer.step()
         self.loss += loss.item()
-        self.ploss += ploss.item()
-        self.vloss += loss_Vocab.item()
+        self.vloss += loss_v.item()
+        self.ploss += loss_ptr.item()
+
+    def save_models(self):
+        torch.save(self.encoder.state_dict(), 'encoder.pth')
+        torch.save(self.decoder.state_dict(), 'decoder.pth')
+
+    def load_models(self, path='.'):
+        import os
+        self.encoder.load_state_dict(os.path.join(path, 'encoder.pth'))
+        self.decoder.load_state_dict(os.path.join(path, 'decoder.pth'))
+
 
 
 class Encoder(nn.Module):
@@ -146,12 +215,12 @@ class Encoder(nn.Module):
         self.dropout = 0.2
 
         #(TODO) : Initialize with word2vec
-        # self.A = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
-        # self.A.apply(init_weights)
-        self.C = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops+1)])
+        self.A = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
+        self.A.apply(init_weights)
+        self.C = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
         self.C.apply(init_weights)
-        # for i in range(self.hops-1):
-        #     self.C[i].weight = self.A[i+1].weight
+        for i in range(self.hops-1):
+            self.C[i].weight = self.A[i+1].weight
         self.soft = torch.nn.Softmax(dim=1)
 
     def forward(self, context):
@@ -166,13 +235,13 @@ class Encoder(nn.Module):
 
         context = context.view(size[0],-1) # b x l*3
         for h in range(self.hops):
-            m = self.C[h](context) # b x l*3 x e
+            m = self.A[h](context) # b x l*3 x e
             m = m.view(size[0],size[1],size[2],self.emb_size) # b x l x 3 x e
             m = torch.sum(m,2) # b x l x e
             p = torch.sum(m*q.unsqueeze(1), 2) # b x l (TODO): expand_as(m)
             attn = self.soft(p)
 
-            c = self.C[h+1](context) # b x l*3 x e
+            c = self.C[h](context) # b x l*3 x e
             c = c.view(size[0],size[1],size[2],self.emb_size) # b x l x 3 x e
             c = torch.sum(c,2).squeeze(2) # b x l x e
             o = torch.bmm(attn.unsqueeze(1), c).squeeze(1)
@@ -200,9 +269,16 @@ class Decoder(nn.Module):
         def init_weights(m):
             if type(m) == torch.nn.Embedding:
                 m.weight.data=torch.normal(0.0,torch.ones(self.nwords,self.emb_size)*0.1)
-        self.C = torch.nn.ModuleList([torch.nn.Embedding(self.nwords, self.emb_size)\
-                                      for h in range(self.hops+1)])
+
+        self.A = torch.nn.ModuleList(
+            [torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
+        self.A.apply(init_weights)
+        self.C = torch.nn.ModuleList(
+            [torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
         self.C.apply(init_weights)
+        for i in range(self.hops - 1):
+            self.C[i].weight = self.A[i + 1].weight
+
         self.soft = nn.Softmax(dim=1)
         self.lin_vocab = nn.Linear(2*emb_size,self.nwords)
         self.gru = nn.GRU(emb_size, emb_size)
@@ -212,11 +288,11 @@ class Decoder(nn.Module):
         self.memories = []
         context = context.view(size[0],-1)
         for hop in range(self.hops):
-            m = self.C[hop](context)
+            m = self.A[hop](context)
             m = m.view(size[0],size[1],size[2],self.emb_size)
             m = torch.sum(m, 2)
             self.memories.append(m)
-            c = self.C[hop+1](context)
+            c = self.C[hop](context)
             c = c.view(size[0], size[1], size[2], self.emb_size)
             c = torch.sum(c, 2)
         self.memories.append(c)
