@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import pdb
 from model import Encoder
 
+use_cuda = torch.cuda.is_available()
 
 class TextDataset(Dataset):
     def __init__(self, memory, w2i):
@@ -77,8 +78,12 @@ def collate_fn(batch):
         out_gate[i, 0:len(batch[i][3])] = gate[i]
         out_dialog_idxs[i] = dialog_idxs[i]
 
-    return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-        out_gate), context_lengths, target_lengths, out_dialog_idxs
+    if use_cuda:
+        return torch.from_numpy(out_context).cuda(), torch.from_numpy(out_target).cuda(), torch.from_numpy(out_index).cuda(), \
+           torch.from_numpy(out_gate).cuda(), context_lengths.cuda(), target_lengths.cuda(), out_dialog_idxs.cuda()
+    else:
+        return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
+            out_gate), context_lengths, target_lengths, out_dialog_idxs
 
 
 def find_entities(filename):
