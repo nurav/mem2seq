@@ -5,7 +5,7 @@ from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
 import pdb 
 from tqdm import tqdm
-from model import Model
+from model_test import Model
 from data import find_entities, read_dataset, TextDataset, collate_fn
 
 

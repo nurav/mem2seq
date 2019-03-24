@@ -29,12 +29,13 @@ if use_cuda:
 
 class Model(nn.Module):
     # def __init__(self, gru_size, nwords, lr, hops, dropout, unk_mask):
-    def __init__(self, hops, nwords, emb_size, gru_size, w2i):
+    def __init__(self, hops, nwords, emb_size, gru_size, batch_size, w2i):
 
         super(Model, self).__init__()
         self.name = "Mem2Seq"
         self.nwords = nwords
         self.gru_size = gru_size
+        self.batch_size = batch_size
         self.emb_size = emb_size
         assert(self.gru_size == self.emb_size)
         
@@ -78,7 +79,7 @@ class Model(nn.Module):
         loss_Vocab, ploss = 0, 0
 
         # Run words through encoder
-        decoder_hidden = self.encoder(input_batches.transpose(0,1)).unsqueeze(0)
+        decoder_hidden = self.encoder(input_batches.transpose(0, 1)).unsqueeze(0)
 
         self.decoder.load_memory(input_batches.transpose(0, 1))
 
@@ -130,6 +131,48 @@ class Model(nn.Module):
         self.ploss += ploss.item()
         self.vloss += loss_Vocab.item()
 
+    def evaluate(self, context, response):
+        #assert (context.size(0) == 1)
+        ctx = context.transpose(0,1)
+        res_trans = response.transpose(0,1).type(TYPE)
+        self.decoder.load_memory(ctx)
+        ctx = ctx.type(TYPE)
+        context = context.type(TYPE)
+        response = response.type(TYPE)
+
+        h = self.encoder(ctx)
+        y = torch.from_numpy(np.array([2] * ctx.size(0), dtype=int)).type(TYPE)
+        y_len = 0
+
+        loss = 0
+        loss_v = 0
+        loss_ptr = 0
+        h = h.unsqueeze(0)
+        output = np.full((ctx.size(0), res_trans.size(1)),-1 )
+        mask = np.ones(ctx.size(0),dtype=np.int32)
+        correct_words = 0
+        total_words = 0
+        while y_len < res_trans.size(1):  #
+            p_ptr, p_vocab, h = self.decoder(ctx, y, h)
+            p_ptr_argmax = torch.argmax(p_ptr, dim=1).data.numpy()
+            p_vocab_argmax = torch.argmax(p_vocab, dim=1).data.numpy()
+            #output = np.zeros(p_ptr_argmax.shape[0], dtype=np.int32)
+            for i, max_idx in enumerate(p_ptr_argmax):
+                if max_idx < ctx.size(1): #Not a sentinel
+                    output[i, y_len] = ctx[i][max_idx][0].item()
+                else:
+                    output[i, y_len] = p_vocab_argmax[i]
+            correct_words += sum(np.multiply(mask,output[:,y_len]==res_trans[:, y_len].data.numpy()))
+
+            y = res_trans[:, y_len].type(TYPE)
+            total_words += sum(mask)
+            mask_candidate = output[:,y_len] == self.w2i['<eos>']
+            for m_idx, m in enumerate(mask_candidate):
+                if m == True:
+                    mask[max_idx] = 0
+            y_len += 1
+
+        return correct_words/total_words
 
 class Encoder(nn.Module):
     def __init__(self, hops, nwords, emb_size):
