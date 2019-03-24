@@ -59,16 +59,16 @@ from data import find_entities, read_dataset, TextDataset, collate_fn
 # # ntags = len(t2i)
 
 
-import numpy as np
-import logging
+# import numpy as np
+# import logging
 from tqdm import tqdm
-
-from utils.config import *
-from models.enc_vanilla import *
-from models.enc_Luong import *
-from models.enc_PTRUNK import *
+#
+# from utils.config import *
+# from models.enc_vanilla import *
+# from models.enc_Luong import *
+# from models.enc_PTRUNK import *
 from model_test import *
-import pdb
+# import pdb
 
 BLEU = False
 
