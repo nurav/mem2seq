@@ -62,74 +62,6 @@ class Model(nn.Module):
         self.n += 1
         return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
 
-    # def train_batch(self, context, context_lengths, responses,
-    #                 response_lengths, index, sentinel, clip, new_epoch):
-    #     if new_epoch:
-    #         self.loss = 0
-    #         self.ploss = 0
-    #         self.vloss = 0
-    #         self.n = 1
-    #
-    #     self.batch_size = context.size(1)
-    #     self.encoder_optimizer.zero_grad()
-    #     self.decoder_optimizer.zero_grad()
-    #
-    #
-    #     loss_Vocab, ploss = 0, 0
-    #
-    #     # Run words through encoder
-    #     h = self.encoder(context.transpose(0,1)).unsqueeze(0)
-    #
-    #     self.decoder.load_memory(context.transpose(0, 1))
-    #
-    #     # Prepare input and output variables
-    #     decoder_input = Variable(torch.LongTensor([2] * self.batch_size))
-    #
-    #     max_target_length = max(response_lengths)
-    #     all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, self.batch_size, self.nwords))
-    #     all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, self.batch_size, context.size(0)))
-    #
-    #     # Move new Variables to CUDA
-    #     if use_cuda:
-    #         all_decoder_outputs_vocab = all_decoder_outputs_vocab.cuda()
-    #         all_decoder_outputs_ptr = all_decoder_outputs_ptr.cuda()
-    #         decoder_input = decoder_input.cuda()
-    #
-    #
-    #     for t in range(max_target_length):
-    #         decoder_ptr, decoder_vacab, h = self.decoder(context, decoder_input, h)
-    #
-    #         all_decoder_outputs_vocab[t] = decoder_vacab
-    #         all_decoder_outputs_ptr[t] = decoder_ptr
-    #
-    #         decoder_input = responses[t]  # Chosen word is next input
-    #         if use_cuda: decoder_input = decoder_input.cuda()
-    #
-    #     # Loss calculation and backpropagation
-    #     loss_Vocab = masked_cross_entropy(
-    #         all_decoder_outputs_vocab.transpose(0, 1).contiguous(),  # -> batch x seq
-    #         responses.transpose(0, 1).contiguous(),  # -> batch x seq
-    #         response_lengths
-    #     )
-    #     ploss = masked_cross_entropy(
-    #         all_decoder_outputs_ptr.transpose(0, 1).contiguous(),  # -> batch x seq
-    #         index.transpose(0, 1).contiguous(),  # -> batch x seq
-    #         response_lengths
-    #     )
-    #
-    #     loss = loss_Vocab + ploss
-    #     loss.backward()
-    #
-    #     ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
-    #     dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
-    #
-    #
-    #     self.encoder_optimizer.step()
-    #     self.decoder_optimizer.step()
-    #     self.loss += loss.item()
-    #     self.ploss += ploss.item()
-    #     self.vloss += loss_Vocab.item()
-
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads):
 
         #(TODO): remove transpose
@@ -139,8 +71,7 @@ class Model(nn.Module):
             self.vloss = 0
             self.n = 1
 
-        # with torch.autograd.set_detect_anomaly(True):
-        # print(i)
+
         context = context.type(TYPE)
         responses = responses.type(TYPE)
         index = index.type(TYPE)
@@ -189,9 +120,10 @@ class Model(nn.Module):
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
 
-    def save_models(self):
-        torch.save(self.encoder.state_dict(), 'encoder.pth')
-        torch.save(self.decoder.state_dict(), 'decoder.pth')
+    def save_models(self, path):
+        import os
+        torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))
+        torch.save(self.decoder.state_dict(), os.path.join(path, 'decoder.pth'))
 
     def load_models(self, path='.'):
         import os
@@ -249,14 +181,6 @@ class Encoder(nn.Module):
         return q
 
 
-
-
-
-
-
-
-
-
 class Decoder(nn.Module):
     # def __init__(self, vocab, embedding_dim, hop, dropout, unk_mask):
     def __init__(self, emb_size, hops, gru_size, nwords):
@@ -266,6 +190,7 @@ class Decoder(nn.Module):
         self.hops = hops
         self.emb_size = emb_size
         self.gru_size = gru_size
+
         def init_weights(m):
             if type(m) == torch.nn.Embedding:
                 m.weight.data=torch.normal(0.0,torch.ones(self.nwords,self.emb_size)*0.1)
