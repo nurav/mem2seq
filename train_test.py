@@ -19,6 +19,7 @@ parser.add_argument("--name", type=str, default='task5')
 parser.add_argument("-b", type=int, default=8, dest='batch_size')
 parser.add_argument("--cuda", action='store_true', default=True)
 parser.add_argument("--load_from", type=str, default=None)
+parser.add_argument("--epochs", type=int, default=100)
 
 args = parser.parse_args()
 
@@ -40,7 +41,7 @@ if args.load_from:
     model.load_models(args.load_from)
 
 with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
-    for epoch in range(300):
+    for epoch in range(args.epochs):
         pbar = tqdm(enumerate(train), total=len(train))
         for i, batch in pbar:
             model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
