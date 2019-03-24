@@ -40,7 +40,7 @@ class Model(nn.Module):
 
         self.n = 1
 
-    def train(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip):
+    def trainer(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip):
 
         if new_epoch: # (TODO): Change this part
             self.loss = 0
@@ -118,8 +118,8 @@ class Model(nn.Module):
         self.loss_ptr += loss_ptr.item()
 
     def evaluate(self, context, response):
-        assert (context.size(0) == 1)
-
+        #assert (context.size(0) == 1)
+        self.decoder.load_memory(context)
         context = context.type(TYPE)
         response = response.type(TYPE)
 
@@ -131,25 +131,31 @@ class Model(nn.Module):
         loss_v = 0
         loss_ptr = 0
         h = h.unsqueeze(0)
-        output = []
+        output = np.full((context.size(0), response.size(1)),-1 )
+        mask = np.ones(context.size(0),dtype=np.int32)
         correct_words = 0
+        total_words = 0
         while y_len < response.size(1):  #
             h, p_vocab, p_ptr = self.decoder(context, h, y)
-            if p_ptr.item() < context.size(1):
-                output.append(context[0][p_ptr][0].item())
-            else:
-                output.append(p_vocab.argmax())
-            correct_words += int(output[-1]==response[0][y_len])
+            p_ptr_argmax = torch.argmax(p_ptr, dim=1).data.numpy()
+            p_vocab_argmax = torch.argmax(p_vocab, dim=1).data.numpy()
+            #output = np.zeros(p_ptr_argmax.shape[0], dtype=np.int32)
+            for i, max_idx in enumerate(p_ptr_argmax):
+                if max_idx < context.size(1): #Not a sentinel
+                    output[i, y_len] = context[i][max_idx][0].item()
+                else:
+                    output[i, y_len] = p_vocab_argmax[i]
+            correct_words += sum(np.multiply(mask,output[:,y_len]==response[:, y_len].data.numpy()))
+
+            y = response[:, y_len].type(TYPE)
+            total_words += sum(mask)
+            mask_candidate = output[:,y_len] == self.w2i['<eos>']
+            for m_idx, m in enumerate(mask_candidate):
+                if m == True:
+                    mask[max_idx] = 0
             y_len += 1
-            y = response[:, y_len - 1].type(TYPE)
 
-            if output[-1] == self.w2i['<eos>']:
-                break
-
-        return correct_words/response.size(1)
-
-
-        # loss = loss_ptr + loss_v
+        return correct_words/total_words
 
 
     def show_loss(self):

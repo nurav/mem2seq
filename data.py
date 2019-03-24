@@ -45,7 +45,7 @@ class TextDataset(Dataset):
         return len(self.memory)
 
     def __getitem__(self, idx):
-        return self.memory[idx][4], self.memory[idx][5], self.memory[idx][2], self.memory[idx][3]
+        return self.memory[idx][5], self.memory[idx][6], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4]
 
 
 def collate_fn(batch):
@@ -62,20 +62,23 @@ def collate_fn(batch):
     target = [np.array(x[1]) for x in batch]
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
+    dialog_idxs = [np.array(x[4]) for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
     out_index = np.zeros((len(batch), max_len_target), dtype=np.int64)
     out_gate = np.zeros((len(batch), max_len_target))
+    out_dialog_idxs = np.zeros((len(batch)), dtype=np.int64)
 
     for i, x in enumerate(batch):
         out_context[i, 0:len(batch[i][0]), :] = context[i]
         out_target[i, 0:len(batch[i][1])] = target[i]
         out_index[i, 0:len(batch[i][2])] = index[i]
         out_gate[i, 0:len(batch[i][3])] = gate[i]
+        out_dialog_idxs[i] = dialog_idxs[i]
 
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-        out_gate), context_lengths, target_lengths
+        out_gate), context_lengths, target_lengths, out_dialog_idxs
 
 
 def find_entities(filename):
@@ -111,7 +114,7 @@ def read_dataset(string, kb_entries):
     UNK = w2i["<unk>"]  # 1
     EOS = w2i["<eos>"]  # 2
     SOS = w2i["<sos>"]  # 3
-
+    dialog_idx = 0
     _ = w2i['$u']
     _ = w2i['$s']
 
@@ -121,6 +124,7 @@ def read_dataset(string, kb_entries):
             time = 1
             sentinel = []
             idx = []
+            dialog_idx += 1
 
 
         elif '\t' not in line:
@@ -153,7 +157,7 @@ def read_dataset(string, kb_entries):
 
             context_new.extend([['$$$$'] * 3])
 
-            memory.append([context_new, bot, idx, sentinel])  ##### final output
+            memory.append([context_new, bot, idx, sentinel, dialog_idx])  ##### final output
 
             context.extend([[word, '$s', 't' + str(time)] for word in bot.split(' ')])
 
