@@ -90,7 +90,7 @@ train = torch.utils.data.DataLoader(dataset=data,
                                               shuffle=False,
                                               collate_fn=collate_fn)
 # pdb.set_trace()
-model = Mem2Seq(128, len(w2i), 0.001, 1, 0.2, False)
+model = Model(3, len(w2i), 128, 128, w2i)
 
 for epoch in range(300):
     logging.info("Epoch:{}".format(epoch))
