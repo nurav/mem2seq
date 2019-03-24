@@ -59,16 +59,16 @@ from data import find_entities, read_dataset, TextDataset, collate_fn
 # # ntags = len(t2i)
 
 
-import numpy as np
-import logging
+# import numpy as np
+# import logging
 from tqdm import tqdm
-
-from utils.config import *
-from models.enc_vanilla import *
-from models.enc_Luong import *
-from models.enc_PTRUNK import *
+#
+# from utils.config import *
+# from models.enc_vanilla import *
+# from models.enc_Luong import *
+# from models.enc_PTRUNK import *
 from model_test import *
-import pdb
+# import pdb
 
 BLEU = False
 
@@ -90,7 +90,7 @@ train = torch.utils.data.DataLoader(dataset=data,
                                               shuffle=False,
                                               collate_fn=collate_fn)
 # pdb.set_trace()
-model = Mem2Seq(128, len(w2i), 0.001, 1, 0.2, False)
+model = Model(3, len(w2i), 128, 128, w2i)
 
 for epoch in range(300):
     logging.info("Epoch:{}".format(epoch))
