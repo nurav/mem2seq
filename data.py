@@ -46,7 +46,7 @@ class TextDataset(Dataset):
         return len(self.memory)
 
     def __getitem__(self, idx):
-        return self.memory[idx][5], self.memory[idx][6], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4]
+        return self.memory[idx][5], self.memory[idx][6], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4], self.memory[idx][0], self.memory[idx][1]
 
 
 def collate_fn(batch):
@@ -64,6 +64,8 @@ def collate_fn(batch):
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
     dialog_idxs = [np.array(x[4]) for x in batch]
+    context_words = [x[5] for x in batch]
+    target_words = [x[6] for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
@@ -80,10 +82,10 @@ def collate_fn(batch):
 
     if use_cuda:
         return torch.from_numpy(out_context).cuda(), torch.from_numpy(out_target).cuda(), torch.from_numpy(out_index).cuda(), \
-           torch.from_numpy(out_gate).cuda(), context_lengths.cuda(), target_lengths.cuda(), out_dialog_idxs.cuda()
+           torch.from_numpy(out_gate).cuda(), context_lengths.cuda(), target_lengths.cuda(), out_dialog_idxs.cuda(), context_words.cuda(), target_words.cuda()
     else:
         return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-            out_gate), context_lengths, target_lengths, out_dialog_idxs
+            out_gate), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words
 
 
 def find_entities(filename):
