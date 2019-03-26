@@ -9,7 +9,7 @@ import pickle
 
 from data import find_entities, read_dataset, TextDataset, collate_fn
 
-from model_test import *
+from model import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--task", type=str, default='dialog-babi-task4-phone-address')
