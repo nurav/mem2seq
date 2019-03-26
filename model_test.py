@@ -47,6 +47,8 @@ class Model(nn.Module):
 
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+        self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
+                                                        min_lr=0.0001, verbose=True)
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()  # masked_cross_entropy
 
@@ -135,6 +137,8 @@ class Model(nn.Module):
         loss = loss_ptr + loss_v
 
         loss.backward()
+        ec = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 10.0)
+        dc = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 10.0)
         self.optim_enc.step()
         self.optim_dec.step()
 

@@ -12,12 +12,12 @@ from data import find_entities, read_dataset, TextDataset, collate_fn
 from model_test import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--task", type=str, default='dialog-babi-task1-API-calls')
+parser.add_argument("--task", type=str, default='dialog-babi-task4-phone-address')
 parser.add_argument("--personalized", action='store_true', default=False)
 parser.add_argument("--log", action='store_true', default=True)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--val", type=int, default=5)
-parser.add_argument("--name", type=str, default='task5')
+parser.add_argument("--name", type=str, default='task4')
 parser.add_argument("-b", type=int, default=8, dest='batch_size')
 parser.add_argument("--cuda", action='store_true', default=True)
 parser.add_argument("--load_from", type=str, default=None)
@@ -105,6 +105,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         if (epoch % args.val == 0):
             model.eval()
             acc = model.evaluate(dev_data_loader,avg_best, kb_entries, i2w)
+            model.scheduler.step(acc)
         # if 'Mem2Seq' in args['decoder']:
         #     model.scheduler.step(acc)
         if acc is None or avg_best is None:
