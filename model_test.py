@@ -157,8 +157,8 @@ class Model(nn.Module):
 
     def load_models(self, path: object = '.') -> object:
         import os
-        self.encoder.load_state_dict(os.path.join(path, 'encoder.pth'))
-        self.decoder.load_state_dict(os.path.join(path, 'decoder.pth'))
+        self.encoder.load_state_dict(torch.load(os.path.join(path, 'encoder.pth')))
+        self.decoder.load_state_dict(torch.load(os.path.join(path, 'decoder.pth')))
 
     # def evaluate(self, context, response):
     #     #assert (context.size(0) == 1)

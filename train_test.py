@@ -19,8 +19,9 @@ parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--val", type=int, default=5)
 parser.add_argument("--name", type=str, default='task4')
 parser.add_argument("-b", type=int, default=8, dest='batch_size')
-parser.add_argument("--cuda", action='store_true', default=True)
+parser.add_argument("--cuda", action='store_true', default=False)
 parser.add_argument("--load_from", type=str, default=None)
+parser.add_argument("--test", action="store_true", default=False)
 parser.add_argument("--epochs", type=int, default=100)
 
 args = parser.parse_args()
@@ -32,9 +33,12 @@ acc = 0
 if not args.personalized:
     train, w2i = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-trn.txt", kb_entries))
     dev, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-dev.txt", kb_entries))
+    test, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-tst.txt", kb_entries))
 
 data_train = TextDataset(train, w2i)
 data_dev = TextDataset(dev, w2i)
+data_test = TextDataset(test, w2i)
+
 i2w = {v: k for k, v in w2i.items()}
 
 train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
@@ -43,6 +47,11 @@ train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
                                               collate_fn=collate_fn)
 
 dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
+                                              batch_size=args.batch_size,
+                                              shuffle=False,
+                                              collate_fn=collate_fn)
+
+test_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
                                               batch_size=args.batch_size,
                                               shuffle=False,
                                               collate_fn=collate_fn)
@@ -74,6 +83,11 @@ plot_data = {
         'ptr_loss': [],
     },
 }
+
+if args.test:
+    model.eval()
+    acc = model.evaluate(test_data_loader, 0, kb_entries, i2w)
+    import sys; sys.exit(0)
 
 with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
     for epoch in range(args.epochs):
