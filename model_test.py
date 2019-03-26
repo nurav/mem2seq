@@ -52,6 +52,10 @@ class Model(nn.Module):
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()  # masked_cross_entropy
 
+        if use_cuda:
+            self.cross_entropy = self.cross_entropy.cuda()
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
         self.loss = 0
         self.ploss = 0
         self.vloss = 0
@@ -131,8 +135,8 @@ class Model(nn.Module):
             mask_p[target_lengths[i]:, i, :] = 0
 
 
-        loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords), responses.contiguous().view(-1))
-        loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)), index.contiguous().view(-1))
+        loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords), responses.cpu().contiguous().view(-1))
+        loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)), index.cpu().contiguous().view(-1))
 
         loss = loss_ptr + loss_v
 
@@ -336,8 +340,6 @@ class Model(nn.Module):
             words = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0,1), data_dev[4], data_dev[1].transpose(0,1), data_dev[5],
                                         data_dev[2].transpose(0,1), data_dev[3].transpose(0,1), data_dev[7])
 
-
-
             acc = 0
             w = 0
             temp_gen = []
@@ -357,12 +359,12 @@ class Model(nn.Module):
 
 
                 if data_dev[6][i] not in dialog_acc_dict.keys():
-                    dialog_acc_dict[data_dev[6][i]] = []
+                    dialog_acc_dict[data_dev[6][i].item()] = []
                 if (correct == st):
                     acc += 1
-                    dialog_acc_dict[data_dev[6][i]].append(1)
+                    dialog_acc_dict[data_dev[6][i].item()].append(1)
                 else:
-                    dialog_acc_dict[data_dev[6][i]].append(0)
+                    dialog_acc_dict[data_dev[6][i].item()].append(0)
 
 
                 w += wer(correct, st)

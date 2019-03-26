@@ -49,6 +49,9 @@ dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
 
 model = Model(3, len(w2i), 128, 128, w2i)
 
+if args.cuda:
+    model = model.cuda()
+
 if args.load_from:
     model.load_models(args.load_from)
 
