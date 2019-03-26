@@ -340,6 +340,11 @@ class Model(nn.Module):
             words = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0,1), data_dev[4], data_dev[1].transpose(0,1), data_dev[5],
                                         data_dev[2].transpose(0,1), data_dev[3].transpose(0,1), data_dev[7])
 
+            transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
+
+            with open('out_words.txt', 'a') as f:
+               [f.write(' '.join(w)) for w in transposed_words]
+               f.write('\n')
             acc = 0
             w = 0
             temp_gen = []

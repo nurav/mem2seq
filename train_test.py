@@ -51,11 +51,10 @@ dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
                                               shuffle=False,
                                               collate_fn=collate_fn)
 
-test_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
+test_data_loader = torch.utils.data.DataLoader(dataset=data_test,
                                               batch_size=args.batch_size,
                                               shuffle=False,
                                               collate_fn=collate_fn)
-
 model = Model(3, len(w2i), 128, 128, w2i)
 
 if args.cuda:
@@ -105,7 +104,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             plot_data['train']['vocab_loss'].append(model.losses()[1])
             plot_data['train']['ptr_loss'].append(model.losses()[2])
 
-        # if epoch % args.val == 0:
+        if epoch % args.val == 0:
         #     response_acc = []
         #     batch_sizes = []
         #     model.eval()
@@ -116,8 +115,8 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         #
         #     model.train()
         #
-        #     os.makedirs('checkpoints/ckpt-' + str(epoch), exist_ok=True)
-        #     model.save_models('checkpoints/ckpt-' + str(epoch))
+            os.makedirs('checkpoints/ckpt-' + str(epoch), exist_ok=True)
+            model.save_models('checkpoints/ckpt-' + str(epoch))
 
         if (epoch % args.val == 0):
             model.eval()
