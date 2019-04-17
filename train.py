@@ -7,12 +7,15 @@ import datetime
 import os
 import pickle
 
-from data import find_entities, read_dataset, TextDataset, collate_fn
 
-from model import *
+
+
+
+
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--task", type=str, default='dialog-babi-task4-phone-address')
+parser.add_argument("--task", type=str, default='dialog-babi-task1-API-calls')
 parser.add_argument("--personalized", action='store_true', default=False)
 parser.add_argument("--log", action='store_true', default=True)
 parser.add_argument("--lr", type=float, default=0.001)
@@ -26,11 +29,22 @@ parser.add_argument("--epochs", type=int, default=100)
 
 args = parser.parse_args()
 
-kb_entries = find_entities("data/dialog-bAbI-tasks/dialog-babi-kb-all.txt")
+kb_entries = None
+
 avg_best = 0
 acc = 0
 
-if not args.personalized:
+if args.personalized:
+    from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
+    from model_personalized import *
+    kb_entries = find_entities("data/personalized-dialog-dataset/full/personalized-dialog-kb-all.txt")
+    train, w2i = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", kb_entries))
+    dev, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-dev.txt", kb_entries))
+    test, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-tst.txt", kb_entries))
+else:
+    from data import find_entities, read_dataset, TextDataset, collate_fn
+    from model import *
+    kb_entries = find_entities("data/dialog-bAbI-tasks/personalized-dialog-kb-all.txt")
     train, w2i = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-trn.txt", kb_entries))
     dev, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-dev.txt", kb_entries))
     test, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-tst.txt", kb_entries))
@@ -94,7 +108,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         for i, batch in pbar:
             model.train()
             model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
-                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
+                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
             pbar.set_description(model.print_loss())
 
             if args.log:
