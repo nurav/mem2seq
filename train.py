@@ -112,8 +112,12 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         for i, batch in pbar:
             model.train()
             if args.model_personalized:
-                model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                if args.personalization_type == 'split_memory' or args.personalization_type == 'hidden':
+                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                               batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
+                else:
+                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                                      batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             else:
                 model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                   batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
