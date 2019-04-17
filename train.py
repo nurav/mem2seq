@@ -20,6 +20,7 @@ parser.add_argument("--cuda", action='store_true', default=False)
 parser.add_argument("--load_from", type=str, default=None)
 parser.add_argument("--test", action="store_true", default=False)
 parser.add_argument("--epochs", type=int, default=100)
+parser.add_argument("--personalization_type", type=str, default='split_memory')
 
 args = parser.parse_args()
 
@@ -28,11 +29,19 @@ kb_entries = None
 avg_best = 0
 acc = 0
 if args.model_personalized:
-    from model_personalized import *
+    if args.personalization_type == 'context':
+        from model_personalized_context import *
+    elif args.personalization_type == 'hidden':
+        from model_personalized_hidden import *
+    else:
+        from model_personalized import *
 else:
     from model import *
 if args.data_personalized:
-    from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
+    if args.personalization_type == 'context':
+        from data_personal_context import find_entities, read_dataset, TextDataset, collate_fn
+    else:
+        from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
     kb_entries = find_entities("data/personalized-dialog-dataset/full/personalized-dialog-kb-all.txt")
     train, w2i = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", kb_entries))
     dev, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-dev.txt", kb_entries))
@@ -128,8 +137,8 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         #
         #     model.train()
         #
-            os.makedirs('checkpoints/ckpt-' + str(epoch), exist_ok=True)
-            model.save_models('checkpoints/ckpt-' + str(epoch))
+            os.makedirs('checkpoints/ckpt-' + str(args.name)+'-'+str(epoch), exist_ok=True)
+            model.save_models('checkpoints/ckpt-' + str(args.name)+'-'+str(epoch))
 
         if (epoch % args.val == 0):
             model.eval()
@@ -148,5 +157,6 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         if(cnt == 5): break
         if(acc == 1.0): break
 
-out_file = open(f"plot-data-{str(datetime.datetime.now())}.pkl", 'wb')
+out_file = open(f"plot-data-{args.name}.pkl", 'wb')
 out_file.write(pickle.dumps((plot_data, model.plot_data)))
+out_file.close()
