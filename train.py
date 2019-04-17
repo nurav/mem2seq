@@ -16,7 +16,8 @@ import pickle
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--task", type=str, default='dialog-babi-task1-API-calls')
-parser.add_argument("--personalized", action='store_true', default=False)
+parser.add_argument("--model_personalized", action='store_true', default=False)
+parser.add_argument("--data_personalized", action='store_true', default=False)
 parser.add_argument("--log", action='store_true', default=True)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--val", type=int, default=5)
@@ -33,18 +34,19 @@ kb_entries = None
 
 avg_best = 0
 acc = 0
-
-if args.personalized:
-    from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
+if args.model_personalized:
     from model_personalized import *
+else:
+    from model import *
+if args.data_personalized:
+    from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
     kb_entries = find_entities("data/personalized-dialog-dataset/full/personalized-dialog-kb-all.txt")
     train, w2i = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", kb_entries))
     dev, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-dev.txt", kb_entries))
     test, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-tst.txt", kb_entries))
 else:
     from data import find_entities, read_dataset, TextDataset, collate_fn
-    from model import *
-    kb_entries = find_entities("data/dialog-bAbI-tasks/personalized-dialog-kb-all.txt")
+    kb_entries = find_entities("data/dialog-bAbI-tasks/dialog-babi-kb-all.txt")
     train, w2i = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-trn.txt", kb_entries))
     dev, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-dev.txt", kb_entries))
     test, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-tst.txt", kb_entries))
@@ -107,8 +109,12 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
         pbar = tqdm(enumerate(train_data_loader), total=len(train_data_loader))
         for i, batch in pbar:
             model.train()
-            model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+            if args.model_personalized:
+                model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                               batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
+            else:
+                model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                                  batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             pbar.set_description(model.print_loss())
 
             if args.log:
