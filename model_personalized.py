@@ -370,6 +370,7 @@ class Model(nn.Module):
 
         if (acc_avg >= avg_best):
             return acc_avg
+        return avg_best
 
 
 class Encoder(nn.Module):

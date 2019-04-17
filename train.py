@@ -7,13 +7,6 @@ import datetime
 import os
 import pickle
 
-
-
-
-
-
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--task", type=str, default='dialog-babi-task1-API-calls')
 parser.add_argument("--model_personalized", action='store_true', default=False)
