@@ -83,11 +83,14 @@ if args.load_from:
 
 plot_data = {
     'train': {
+        'batch': [],
+        'epoch': [],
         'loss': [],
         'vocab_loss': [],
         'ptr_loss': [],
     },
     'val':{
+        'batch': [],
         'loss': [],
         'vocab_loss': [],
         'ptr_loss': [],
@@ -126,6 +129,8 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             if args.log:
                 print(f"epoch {epoch}: {model.print_loss()}", file=log_file)
 
+            plot_data['train']['batch'].append(i)
+            plot_data['train']['epoch'].append(epoch)
             plot_data['train']['loss'].append(model.losses()[0])
             plot_data['train']['vocab_loss'].append(model.losses()[1])
             plot_data['train']['ptr_loss'].append(model.losses()[2])
