@@ -160,6 +160,8 @@ class Model(nn.Module):
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
 
+        return loss.item(), loss_v.item(), loss_ptr.item()
+
     def save_models(self, path):
         import os
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))

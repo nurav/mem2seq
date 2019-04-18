@@ -116,13 +116,13 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             model.train()
             if args.model_personalized:
                 if args.personalization_type == 'split_memory' or args.personalization_type == 'hidden':
-                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                    loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                               batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
                 else:
-                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                    loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                       batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             else:
-                model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                   batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             pbar.set_description(model.print_loss())
 
@@ -131,9 +131,9 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
 
             plot_data['train']['batch'].append(i)
             plot_data['train']['epoch'].append(epoch)
-            plot_data['train']['loss'].append(model.losses()[0])
-            plot_data['train']['vocab_loss'].append(model.losses()[1])
-            plot_data['train']['ptr_loss'].append(model.losses()[2])
+            plot_data['train']['loss'].append(loss)
+            plot_data['train']['vocab_loss'].append(vloss)
+            plot_data['train']['ptr_loss'].append(ploss)
 
         if epoch % args.val == 0:
         #     response_acc = []

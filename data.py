@@ -135,6 +135,11 @@ def read_dataset(string, kb_entries):
 
 
         elif '\t' not in line:
+            # if line.split(' ')[0] == '1':
+                #### get profile info ####
+                # for prof in line.split(' ')[1:]:
+
+
             temp = [word for word in line.split(' ')[1:]]
             context.append(temp)
 
@@ -175,5 +180,3 @@ def read_dataset(string, kb_entries):
             time += 1
     # pdb.set_trace()
     return memory, w2i
-
-
