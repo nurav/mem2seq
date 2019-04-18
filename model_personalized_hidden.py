@@ -70,7 +70,7 @@ class Model(nn.Module):
                 'ptr_loss': [],
             },
             'val': {
-                'batch': []
+                'batch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],

@@ -62,17 +62,23 @@ i2w = {v: k for k, v in w2i.items()}
 train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
                                               batch_size=args.batch_size,
                                               shuffle=True,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                                pin_memory=True,
+                                                num_workers=2)
 
 dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
                                               batch_size=args.batch_size,
                                               shuffle=False,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                              pin_memory=True,
+                                              num_workers=2)
 
 test_data_loader = torch.utils.data.DataLoader(dataset=data_test,
                                               batch_size=args.batch_size,
                                               shuffle=False,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                               pin_memory=True,
+                                               num_workers=2)
 model = Model(3, len(w2i), 128, 128, w2i)
 
 if args.cuda:
