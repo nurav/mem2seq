@@ -151,11 +151,22 @@ def read_dataset(string, kb_entries):
 
                 profile_len = tmp_profile_len if profile_len is None else profile_len
             else:
-                temp = [word for word in line.split(' ')[1:]]
-                context.append(temp+current_profile)
+                nid, sent = line.split(' ', 1)
+                sent_new = []
+                sent_token = sent.split(' ')
 
-                for w in temp:
-                    _ = w2i[w]
+                if sent_token[1] == "R_rating":
+                    sent_token_2 = sent_token
+                    sent_token_2.extend(current_profile)
+                else:
+                    sent_token_2 = sent_token[::-1]
+                    sent_token_2.extend(current_profile)
+                sent_new.append(sent_token_2)
+                context.extend(sent_new)
+
+                for s in sent_new:
+                    for w in s:
+                        _ = w2i[w]
 
         else:
             #profile_len = 0

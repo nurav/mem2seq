@@ -63,11 +63,14 @@ class Model(nn.Module):
 
         self.plot_data = {
             'train': {
+                'batch': [],
+                'epoch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
             },
             'val': {
+                'batch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
@@ -157,6 +160,8 @@ class Model(nn.Module):
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
 
+        return loss.item(), loss_v.item(), loss_ptr.item()
+
     def save_models(self, path):
         import os
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))
@@ -168,13 +173,13 @@ class Model(nn.Module):
         self.decoder.load_state_dict(torch.load(os.path.join(path, 'decoder.pth')))
 
     def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
-                       target_gate, src_plain):
+                       target_gate, src_plain, profile_memory):
 
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
         self.decoder.train(False)
         # Run words through encoder
-        decoder_hidden = self.encoder(input_batches.transpose(0, 1)).unsqueeze(0)
+        decoder_hidden = torch.cat((self.encoder(input_batches.transpose(0, 1)).unsqueeze(0),self.profile_encoder(profile_memory.transpose(0, 1)).unsqueeze(0)),dim=2)
         self.decoder.load_memory(input_batches.transpose(0, 1))
 
         # Prepare input and output variables
@@ -303,7 +308,7 @@ class Model(nn.Module):
 
             words = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
                                         data_dev[1].transpose(0, 1), data_dev[5],
-                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7])
+                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7], data_dev[9].transpose(0,1))
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
 
@@ -350,7 +355,7 @@ class Model(nn.Module):
             pbar.set_description("R:{:.4f},W:{:.4f},I:{:.4f}".format(acc_avg / float(len(dev)),
                                                                      wer_avg / float(len(dev)),
                                                                      self.incorrect_sentinel / float(len(dev))))
-
+            self.plot_data['val']['batch'].append(j)
             self.plot_data['val']['acc'].append(acc_avg / float(len(dev)))
             self.plot_data['val']['wer'].append(wer_avg / float(len(dev)))
 

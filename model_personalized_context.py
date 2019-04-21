@@ -62,11 +62,14 @@ class Model(nn.Module):
 
         self.plot_data = {
             'train': {
+                'batch': [],
+                'epoch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
             },
-            'val':{
+            'val': {
+                'batch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
@@ -146,6 +149,8 @@ class Model(nn.Module):
         self.loss += loss.item()
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
+
+        return loss.item(), loss_v.item(), loss_ptr.item()
 
     def save_models(self, path):
         import os
@@ -383,7 +388,7 @@ class Model(nn.Module):
             wer_avg += w / float(len(data_dev[1]))
             pbar.set_description("R:{:.4f},W:{:.4f},I:{:.4f}".format(acc_avg / float(len(dev)),
                                                             wer_avg / float(len(dev)), self.incorrect_sentinel / float(len(dev))))
-
+            self.plot_data['val']['batch'].append(j)
             self.plot_data['val']['acc'].append(acc_avg / float(len(dev)))
             self.plot_data['val']['wer'].append(wer_avg / float(len(dev)))
 

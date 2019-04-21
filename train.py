@@ -62,17 +62,23 @@ i2w = {v: k for k, v in w2i.items()}
 train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
                                               batch_size=args.batch_size,
                                               shuffle=True,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                                pin_memory=True,
+                                                num_workers=2)
 
 dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
                                               batch_size=args.batch_size,
                                               shuffle=False,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                              pin_memory=True,
+                                              num_workers=2)
 
 test_data_loader = torch.utils.data.DataLoader(dataset=data_test,
                                               batch_size=args.batch_size,
                                               shuffle=False,
-                                              collate_fn=collate_fn)
+                                              collate_fn=collate_fn,
+                                               pin_memory=True,
+                                               num_workers=2)
 model = Model(3, len(w2i), 128, 128, w2i)
 
 if args.cuda:
@@ -83,11 +89,14 @@ if args.load_from:
 
 plot_data = {
     'train': {
+        'batch': [],
+        'epoch': [],
         'loss': [],
         'vocab_loss': [],
         'ptr_loss': [],
     },
     'val':{
+        'batch': [],
         'loss': [],
         'vocab_loss': [],
         'ptr_loss': [],
@@ -113,22 +122,24 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             model.train()
             if args.model_personalized:
                 if args.personalization_type == 'split_memory' or args.personalization_type == 'hidden':
-                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                    loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                               batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
                 else:
-                    model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                    loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                       batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             else:
-                model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
+                loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                   batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             pbar.set_description(model.print_loss())
 
             if args.log:
                 print(f"epoch {epoch}: {model.print_loss()}", file=log_file)
 
-            plot_data['train']['loss'].append(model.losses()[0])
-            plot_data['train']['vocab_loss'].append(model.losses()[1])
-            plot_data['train']['ptr_loss'].append(model.losses()[2])
+            plot_data['train']['batch'].append(i)
+            plot_data['train']['epoch'].append(epoch)
+            plot_data['train']['loss'].append(loss)
+            plot_data['train']['vocab_loss'].append(vloss)
+            plot_data['train']['ptr_loss'].append(ploss)
 
         if epoch % args.val == 0:
         #     response_acc = []

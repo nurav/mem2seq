@@ -62,11 +62,14 @@ class Model(nn.Module):
 
         self.plot_data = {
             'train': {
+                'batch': [],
+                'epoch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
             },
             'val':{
+                'batch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
@@ -147,6 +150,8 @@ class Model(nn.Module):
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
 
+        return loss.item(), loss_v.item(), loss_ptr.item()
+
     def save_models(self, path):
         import os
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))
@@ -157,48 +162,6 @@ class Model(nn.Module):
         self.encoder.load_state_dict(torch.load(os.path.join(path, 'encoder.pth')))
         self.decoder.load_state_dict(torch.load(os.path.join(path, 'decoder.pth')))
 
-    # def evaluate(self, context, response):
-    #     #assert (context.size(0) == 1)
-    #     ctx = context.transpose(0,1)
-    #     res_trans = response.transpose(0,1).type(TYPE)
-    #     self.decoder.load_memory(ctx)
-    #     ctx = ctx.type(TYPE)
-    #     context = context.type(TYPE)
-    #     response = response.type(TYPE)
-    #
-    #     h = self.encoder(ctx)
-    #     y = torch.from_numpy(np.array([2] * ctx.size(0), dtype=int)).type(TYPE)
-    #     y_len = 0
-    #
-    #     loss = 0
-    #     loss_v = 0
-    #     loss_ptr = 0
-    #     h = h.unsqueeze(0)
-    #     output = np.full((ctx.size(0), res_trans.size(1)),-1 )
-    #     mask = np.ones(ctx.size(0),dtype=np.int32)
-    #     correct_words = 0
-    #     total_words = 0
-    #     while y_len < res_trans.size(1):  #
-    #         p_ptr, p_vocab, h = self.decoder(ctx, y, h)
-    #         p_ptr_argmax = torch.argmax(p_ptr, dim=1).data.numpy()
-    #         p_vocab_argmax = torch.argmax(p_vocab, dim=1).data.numpy()
-    #         #output = np.zeros(p_ptr_argmax.shape[0], dtype=np.int32)
-    #         for i, max_idx in enumerate(p_ptr_argmax):
-    #             if max_idx < ctx.size(1): #Not a sentinel
-    #                 output[i, y_len] = ctx[i][max_idx][0].item()
-    #             else:
-    #                 output[i, y_len] = p_vocab_argmax[i]
-    #         correct_words += sum(np.multiply(mask,output[:,y_len]==res_trans[:, y_len].data.numpy()))
-    #
-    #         y = res_trans[:, y_len].type(TYPE)
-    #         total_words += sum(mask)
-    #         mask_candidate = output[:,y_len] == self.w2i['<eos>']
-    #         for m_idx, m in enumerate(mask_candidate):
-    #             if m == True:
-    #                 mask[max_idx] = 0
-    #         y_len += 1
-    #
-    #     return correct_words/total_words
 
     def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
                        target_gate, src_plain):
@@ -383,7 +346,7 @@ class Model(nn.Module):
             wer_avg += w / float(len(data_dev[1]))
             pbar.set_description("R:{:.4f},W:{:.4f},I:{:.4f}".format(acc_avg / float(len(dev)),
                                                             wer_avg / float(len(dev)), self.incorrect_sentinel / float(len(dev))))
-
+            self.plot_data['val']['batch'].append(j)
             self.plot_data['val']['acc'].append(acc_avg / float(len(dev)))
             self.plot_data['val']['wer'].append(wer_avg / float(len(dev)))
 
