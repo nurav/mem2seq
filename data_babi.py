@@ -24,8 +24,6 @@ class TextDataset(Dataset):
             bot_seq = m[1]
             index_seq = m[2]
             gate_seq = m[3]
-            # print(len(context_seq), len(bot_seq), len(index_seq), len(gate_seq))
-            # print(m)
             new_context_seq = []
             for c in context_seq:
                 l = []
@@ -135,11 +133,31 @@ def read_dataset(string, kb_entries):
 
 
         elif '\t' not in line:
-            temp = [word for word in line.split(' ')[1:]]
-            context.append(temp)
+            # if line.split(' ')[0] == '1':
+                #### get profile info ####
+                # for prof in line.split(' ')[1:]:
 
-            for w in temp:
-                _ = w2i[w]
+
+            # temp = [word for word in line.split(' ')[1:]]
+            # context.append(temp)
+            #
+            # for w in temp:
+            #     _ = w2i[w]
+            nid, sent = line.split(' ', 1)
+            sent_new = []
+            sent_token = sent.split(' ')
+
+            if sent_token[1] == "R_rating":
+                sent_token = sent_token + ["<pad>"] * (3 - len(sent_token))
+            else:
+                sent_token_2 = sent_token[::-1]
+                sent_token_2.extend(["<pad>"] * (3 - len(sent_token)))
+            sent_new.append(sent_token_2)
+            context.extend(sent_new)
+
+            for s in sent_new:
+                for w in s:
+                    _ = w2i[w]
 
         else:
             sentinel = []  # gate
@@ -175,5 +193,3 @@ def read_dataset(string, kb_entries):
             time += 1
     # pdb.set_trace()
     return memory, w2i
-
-

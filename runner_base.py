@@ -1,9 +1,8 @@
-import data_personal_context
 import os.path
 import torch
 from tqdm import tqdm
 import logging
-from torch.autograd import Variable
+import pickle
 
 import numpy as np
 import datetime
@@ -54,19 +53,25 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.i2w = {v: k for k, v in self.w2i.items()}
 
         self.train_data_loader = torch.utils.data.DataLoader(dataset=self.data_train,
-                                                        batch_size=self.batch_size,
-                                                        shuffle=True,
-                                                        collate_fn=collate_fn)
+                                                             batch_size=self.batch_size,
+                                                             shuffle=True,
+                                                             collate_fn=collate_fn,
+                                                             pin_memory=True,
+                                                             num_workers=2)
 
         self.dev_data_loader = torch.utils.data.DataLoader(dataset=self.data_dev,
-                                                      batch_size=self.batch_size,
-                                                      shuffle=False,
-                                                      collate_fn=collate_fn)
+                                                           batch_size=self.batch_size,
+                                                           shuffle=False,
+                                                           collate_fn=collate_fn,
+                                                           pin_memory=True,
+                                                           num_workers=2)
 
         self.test_data_loader = torch.utils.data.DataLoader(dataset=self.data_test,
-                                                       batch_size=self.batch_size,
-                                                       shuffle=False,
-                                                       collate_fn=collate_fn)
+                                                            batch_size=self.batch_size,
+                                                            shuffle=False,
+                                                            collate_fn=collate_fn,
+                                                            pin_memory=True,
+                                                            num_workers=2)
 
 
         self.args = args
@@ -79,14 +84,15 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.acc = 0
         self.avg_best = 0
 
-        self.plot_data = {
+        self.train_plot_data = {
             'train': {
                 'batch': [],
                 'epoch': [],
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
-            },
+            }}
+        self.val_plot_data ={
             'val': {
                 'batch': [],
                 'loss': [],
@@ -94,13 +100,14 @@ class ExperimentRunnerBase(torch.nn.Module):
                 'ptr_loss': [],
                 'wer': [],
                 'acc': []
-            },
+            }}
+        self.test_plot_data = {
             'test': {
                 'loss': [],
                 'vocab_loss': [],
                 'ptr_loss': [],
-            },
-        }
+            }}
+
     def trainer(self):
         with open(f"log-{str(datetime.datetime.now())}-{self.name}", 'w') as log_file:
             for epoch in range(self.epochs):
@@ -108,19 +115,18 @@ class ExperimentRunnerBase(torch.nn.Module):
                 for i, batch in pbar:
                         # TODO: Continue from here
                     self.train()
-                    self.train_batch_wrapper(batch, i == 0, 8)
+                    loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
                     pbar.set_description(self.print_loss())
                     if self.args.log:
                         print(f"epoch {epoch}: {self.print_loss()}", file=log_file)
-                    self.plot_data['train']['batch'].append(i)
-                    self.plot_data['train']['epoch'].append(epoch)
-                    self.plot_data['train']['loss'].append(self.losses()[0])
-                    self.plot_data['train']['vocab_loss'].append(self.losses()[1])
-                    self.plot_data['train']['ptr_loss'].append(self.losses()[2])
+                    self.train_plot_data['train']['batch'].append(i)
+                    self.train_plot_data['train']['epoch'].append(epoch)
+                    self.train_plot_data['train']['loss'].append(loss)
+                    self.train_plot_data['train']['vocab_loss'].append(vloss)
+                    self.train_plot_data['train']['ptr_loss'].append(ploss)
                 if epoch % self.args.val == 0:
                     os.makedirs('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch), exist_ok=True)
                     self.save_models('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch))
-                if (epoch % self.args.val == 0):
                     self.eval()
                     self.acc = self.evaluate(self.dev_data_loader, self.avg_best, self.kb_entries, self.i2w)
                     self.scheduler.step(self.acc)
@@ -136,8 +142,9 @@ class ExperimentRunnerBase(torch.nn.Module):
                     cnt += 1
                 if cnt == 5: break
                 if self.acc == 1.0: break
-    #def train_batch(self, batch, ):
-    #    print("supposed to be overridden")
+        out_file = open(f"plot-data-{self.name}.pkl", 'wb')
+        out_file.write(pickle.dumps((self.train_plot_data, self.val_plot_data)))
+        out_file.close()
 
     def getPersonalDataNames(self, tasknum):
         mapping = {"1": "personalized-dialog-task1-API-calls",
@@ -169,90 +176,6 @@ class ExperimentRunnerBase(torch.nn.Module):
         print_vloss = self.vloss / self.n
         self.n += 1
         return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
-
-    # def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
-    #                    target_gate, src_plain, profile_memory=None):
-    #
-    #     # Set to not-training mode to disable dropout
-    #     self.encoder.train(False)
-    #     self.decoder.train(False)
-    #     if profile_memory:
-    #         self.profile_encoder.train(False)
-    #     # Run words through encoder
-    #     decoder_hidden = self.encoder(input_batches.transpose(0, 1)).unsqueeze(0)
-    #     self.decoder.load_memory(input_batches.transpose(0, 1))
-    #
-    #     # Prepare input and output variables
-    #     decoder_input = Variable(torch.LongTensor([2] * batch_size))
-    #
-    #     decoded_words = []
-    #     all_decoder_outputs_vocab = Variable(torch.zeros(max(target_lengths), batch_size, self.nwords))
-    #     all_decoder_outputs_ptr = Variable(torch.zeros(max(target_lengths), batch_size, input_batches.size(0)))
-    #     # all_decoder_outputs_gate = Variable(torch.zeros(self.max_r, batch_size))
-    #     # Move new Variables to CUDA
-    #
-    #     if self.use_cuda:
-    #         all_decoder_outputs_vocab = all_decoder_outputs_vocab.cuda()
-    #         all_decoder_outputs_ptr = all_decoder_outputs_ptr.cuda()
-    #         # all_decoder_outputs_gate = all_decoder_outputs_gate.cuda()
-    #         decoder_input = decoder_input.cuda()
-    #
-    #     p = []
-    #     for elm in src_plain:
-    #         elm_temp = [word_triple[0] for word_triple in elm]
-    #         p.append(elm_temp)
-    #
-    #     self.from_whichs = []
-    #     acc_gate, acc_ptr, acc_vac = 0.0, 0.0, 0.0
-    #     # Run through decoder one time step at a time
-    #     for t in range(max(target_lengths)):
-    #         decoder_ptr, decoder_vacab, decoder_hidden = model.decoder(input_batches, decoder_input, decoder_hidden)
-    #         all_decoder_outputs_vocab[t] = decoder_vacab
-    #         topv, topvi = decoder_vacab.data.topk(1)
-    #         all_decoder_outputs_ptr[t] = decoder_ptr
-    #         topp, toppi = decoder_ptr.data.topk(1)
-    #         top_ptr_i = torch.gather(input_batches[:, :, 0], 0, Variable(toppi.view(1, -1))).transpose(0, 1)
-    #         next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i] - 1) else topvi[i].item() for i in
-    #                    range(batch_size)]
-    #
-    #         decoder_input = Variable(torch.LongTensor(next_in))  # Chosen word is next input
-    #         if self.use_cuda: decoder_input = decoder_input.cuda()
-    #
-    #         temp = []
-    #         from_which = []
-    #         for i in range(batch_size):
-    #             if (toppi[i].item() < len(p[i]) - 1):
-    #                 temp.append(p[i][toppi[i].item()])
-    #                 from_which.append('p')
-    #             else:
-    #                 if target_index[t][i] != toppi[i].item():
-    #                     self.incorrect_sentinel += 1
-    #                 ind = topvi[i].item()
-    #                 if ind == 3:
-    #                     temp.append('<eos>')
-    #                 else:
-    #                     temp.append(self.i2w[ind])
-    #                 from_which.append('v')
-    #         decoded_words.append(temp)
-    #         self.from_whichs.append(from_which)
-    #     self.from_whichs = np.array(self.from_whichs)
-    #
-    #     loss_v = self.cross_entropy(all_decoder_outputs_vocab.contiguous().view(-1, self.nwords),
-    #                                 target_batches.contiguous().view(-1))
-    #     loss_ptr = self.cross_entropy(all_decoder_outputs_ptr.contiguous().view(-1, input_batches.size(0)),
-    #                                   target_index.contiguous().view(-1))
-    #
-    #     loss = loss_ptr + loss_v
-    #
-    #     self.loss += loss.item()
-    #     self.vloss += loss_v.item()
-    #     self.ploss += loss_ptr.item()
-    #     self.n += 1
-    #
-    #     # Set back to training mode
-    #     model.encoder.train(True)
-    #     model.decoder.train(True)
-    #     return decoded_words  # , acc_ptr, acc_vac
 
     def evaluate(self, dev, avg_best, kb_entries, i2w):
         self.loss = 0
@@ -358,13 +281,13 @@ class ExperimentRunnerBase(torch.nn.Module):
             pbar.set_description("R:{:.4f},W:{:.4f},I:{:.4f}".format(acc_avg / float(len(dev)),
                                                                      wer_avg / float(len(dev)),
                                                                      self.incorrect_sentinel / float(len(dev))))
-            self.plot_data['val']['batch'].append(j)
-            self.plot_data['val']['acc'].append(acc_avg / float(len(dev)))
-            self.plot_data['val']['wer'].append(wer_avg / float(len(dev)))
+            self.val_plot_data['val']['batch'].append(j)
+            self.val_plot_data['val']['acc'].append(acc_avg / float(len(dev)))
+            self.val_plot_data['val']['wer'].append(wer_avg / float(len(dev)))
 
-            self.plot_data['val']['loss'].append(self.losses()[0])
-            self.plot_data['val']['vocab_loss'].append(self.losses()[1])
-            self.plot_data['val']['ptr_loss'].append(self.losses()[2])
+            self.val_plot_data['val']['loss'].append(self.losses()[0])
+            self.val_plot_data['val']['vocab_loss'].append(self.losses()[1])
+            self.val_plot_data['val']['ptr_loss'].append(self.losses()[2])
 
         # dialog accuracy
 

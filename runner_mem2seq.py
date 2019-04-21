@@ -37,7 +37,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         sentinel = batch[3].transpose(0, 1)
         context_lengths = batch[4]
         target_lengths =  batch[5]
-        self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
+        return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths,
                     clip_grads):
@@ -97,6 +97,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.loss += loss.item()
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
+
+        return loss.item(), loss_v.item(), loss_ptr.item()
 
     def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
                        target_gate, src_plain, profile_memory=None):
