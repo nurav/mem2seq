@@ -19,6 +19,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.TYPE = torch.LongTensor
         self.TYPEF = torch.FloatTensor
         self.use_cuda = torch.cuda.is_available()
+        self.out_file = args.out_file
 
         if self.use_cuda:
             self.TYPE = torch.cuda.LongTensor
@@ -238,11 +239,12 @@ class ExperimentRunnerBase(torch.nn.Module):
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
 
-            with open('out_word.txt', 'a') as f:
+            self.out_file = self.name if self.out_file == '' else self.out_file
+            with open(self.out_file, 'a') as f:
                 f.write('------------truth---------------\n\n')
-                [f.write(w) for w in data_dev[8]]
+                [f.write(w + '\n') for w in data_dev[8]]
                 f.write('------------response-------------\n\n')
-                [f.write(''.join(w) + '\n') for w in transposed_words]
+                [f.write(' '.join(w) + '\n') for w in transposed_words]
                 f.write('\n')
 
             acc = 0

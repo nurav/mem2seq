@@ -18,6 +18,7 @@ def parser():
     parser.add_argument("--load_from", type=str, default=None)
     parser.add_argument("--test", action="store_true", default=False)
     parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--out_file", type=str, default='')
 
     return parser.parse_args()
 
