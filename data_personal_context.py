@@ -3,8 +3,6 @@ import torch
 
 from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
-import pdb
-from model import Encoder
 
 use_cuda = torch.cuda.is_available()
 profile_len = None
@@ -201,7 +199,6 @@ def read_dataset(string, kb_entries):
 
             _ = w2i['t' + str(time)]
             time += 1
-    # pdb.set_trace()
     return memory, w2i
 
 
