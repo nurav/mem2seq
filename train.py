@@ -28,6 +28,10 @@ kb_entries = None
 
 avg_best = 0
 acc = 0
+
+global_memory = 0
+global_memory_test = 0
+global_memory_dev = 0
 if args.model_personalized:
     if args.personalization_type == 'context':
         from model_personalized_context import *
@@ -41,11 +45,11 @@ if args.data_personalized:
     if args.personalization_type == 'context':
         from data_personal_context import find_entities, read_dataset, TextDataset, collate_fn
     else:
-        from data_personalized import find_entities, read_dataset, TextDataset, collate_fn
+        from data_specific_context import find_entities, read_dataset, TextDataset, collate_fn
     kb_entries = find_entities("data/personalized-dialog-dataset/full/personalized-dialog-kb-all.txt")
-    train, w2i = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", kb_entries))
-    dev, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-dev.txt", kb_entries))
-    test, _ = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-tst.txt", kb_entries))
+    train, w2i, global_memory = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", kb_entries))
+    dev, _, global_memory_dev = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-dev.txt", kb_entries))
+    test, _, global_memory_test = list(read_dataset(f"data/personalized-dialog-dataset/full/{args.task}-tst.txt", kb_entries))
 else:
     from data import find_entities, read_dataset, TextDataset, collate_fn
     kb_entries = find_entities("data/dialog-bAbI-tasks/dialog-babi-kb-all.txt")
@@ -53,15 +57,15 @@ else:
     dev, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-dev.txt", kb_entries))
     test, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-tst.txt", kb_entries))
 
-data_train = TextDataset(train, w2i)
-data_dev = TextDataset(dev, w2i)
-data_test = TextDataset(test, w2i)
+data_train = TextDataset(train, w2i, global_memory)
+data_dev = TextDataset(dev, w2i, global_memory_dev)
+data_test = TextDataset(test, w2i, global_memory_test)
 
 i2w = {v: k for k, v in w2i.items()}
 
 train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
                                               batch_size=args.batch_size,
-                                              shuffle=True,
+                                              shuffle=False,
                                               collate_fn=collate_fn,
                                                 pin_memory=True,
                                                 num_workers=2)
@@ -123,7 +127,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             if args.model_personalized:
                 if args.personalization_type == 'split_memory' or args.personalization_type == 'hidden':
                     loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
-                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1))
+                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1), batch[10:20])
                 else:
                     loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                       batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
@@ -131,6 +135,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
                 loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                   batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)
             pbar.set_description(model.print_loss())
+
 
             if args.log:
                 print(f"epoch {epoch}: {model.print_loss()}", file=log_file)
