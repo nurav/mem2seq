@@ -14,7 +14,9 @@ class TextDataset(Dataset):
         self.w2i = w2i
         self.global_mem = global_mem
         self.g = [0]*len(self.memory)
+        # self.k = '0'
         self.preprocess()
+
 
     def preprocess(self):
         """ performs word to index conversion for every element
@@ -53,63 +55,68 @@ class TextDataset(Dataset):
 
 
             #### Global memory #####
-            # for k in self.global_mem.keys(): #### for each kind of profile
-            #     if self.global_mem[k][idx] != 0:
-            #         self.g[idx] = self.global_mem[k][idx]
-            #         break
-            #
-            # gcontext_seq = self.g[idx][0]
-            # gbot_seq = self.g[idx][1]
-            # gindex_seq = self.g[idx][2]
-            # ggate_seq = self.g[idx][3]
-            # gprofile_mem = self.g[idx][5]
-            # gnew_context_seq = []
-            # gnew_prof_mem = []
-            # for cg in gcontext_seq:
-            #     lg = []
-            #     for word in cg:
-            #         lg.append(self.w2i[word])
-            #     gnew_context_seq.append(lg)
-            #
-            # for pg in gprofile_mem:
-            #     l2g = []
-            #     for word in pg:
-            #         l2g.append(self.w2i[word])
-            #     gnew_prof_mem.append(l2g)
-            #
-            # gnew_bot_seq = []
-            # for word in gbot_seq.split(' '):
-            #     gnew_bot_seq.append(self.w2i[word])
-            # gnew_bot_seq.append(self.w2i['<eos>'])
+            for k in self.global_mem.keys(): #### for each kind of profile
+                if self.global_mem[k][idx] != 0:
+                    self.g[idx] = self.global_mem[k][idx]
+                    # self.k = k
+                    break
+
+            gcontext_seq = self.g[idx][0]
+            gbot_seq = self.g[idx][1]
+            gindex_seq = self.g[idx][2]
+            ggate_seq = self.g[idx][3]
+            gprofile_mem = self.g[idx][5]
+            gnew_context_seq = []
+            gnew_prof_mem = []
+            for cg in gcontext_seq:
+                lg = []
+                for word in cg:
+                    lg.append(self.w2i[word])
+                gnew_context_seq.append(lg)
+
+            for pg in gprofile_mem:
+                l2g = []
+                for word in pg:
+                    l2g.append(self.w2i[word])
+                gnew_prof_mem.append(l2g)
+
+            gnew_bot_seq = []
+            for word in gbot_seq.split(' '):
+                gnew_bot_seq.append(self.w2i[word])
+            gnew_bot_seq.append(self.w2i['<eos>'])
             # gindex_seq.append(len(gcontext_seq) - 1)
             # ggate_seq.append(False)
-            # self.g[idx].append(gnew_context_seq)
-            # self.g[idx].append(gnew_bot_seq)
-            # self.g[idx].append(gnew_prof_mem)
+            self.g[idx].append(gnew_context_seq)
+            self.g[idx].append(gnew_bot_seq)
+            self.g[idx].append(gnew_prof_mem)
 
     def __len__(self):
         return len(self.memory)
 
     def __getitem__(self, idx):
         return self.memory[idx][6], self.memory[idx][7], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4],\
-               self.memory[idx][0], self.memory[idx][1], self.memory[idx][8]#, self.g[idx][6], self.g[idx][7], self.g[idx][2], self.g[idx][3],\
-               # self.g[idx][4], self.g[idx][0], self.g[idx][1], self.g[idx][8]
+               self.memory[idx][0], self.memory[idx][1], self.memory[idx][8], self.g[idx][6], \
+               self.g[idx][7], self.g[idx][2], self.g[idx][3],\
+               self.g[idx][4], self.g[idx][0], self.g[idx][1], \
+               self.g[idx][8]
 
 
 def collate_fn(batch):
     """ pads the sequences to form tensors
     """
     batch.sort(key=lambda x: -len(x[0]))
+
     context_lengths = [len(x[0]) for x in batch]
     target_lengths = [len(x[1]) for x in batch]
-
     max_len_context = len(batch[0][0])
     max_len_target = max([len(x[1]) for x in batch])
     profile_len = len(batch[0][7])
 
-    # global_max_len_context = len(batch[0][8])
-    # global_max_len_target = max([len(x[9]) for x in batch])
-    # global_profile_len = len(batch[0][15])
+    global_context_lengths = [len(x[0]) for x in batch]
+    global_target_lengths = [len(x[1]) for x in batch]
+    global_max_len_context = len(batch[0][8])
+    global_max_len_target = max([len(x[9]) for x in batch])
+    global_profile_len = len(batch[0][15])
 
     context = [np.array(x[0]) for x in batch]
     target = [np.array(x[1]) for x in batch]
@@ -120,14 +127,14 @@ def collate_fn(batch):
     target_words = [x[6] for x in batch]
     profile_memory = [np.array(x[7]) for x in batch]
 
-    # global_context = [np.array(x[8]) for x in batch]
-    # global_target = [np.array(x[9]) for x in batch]
-    # global_index = [np.array(x[10]) for x in batch]
-    # global_gate = [np.array(x[11]) for x in batch]
-    # global_dialog_idxs = [np.array(x[12]) for x in batch]
-    # global_context_words = [x[13] for x in batch]
-    # global_target_words = [x[14] for x in batch]
-    # global_profile_memory = [np.array(x[15]) for x in batch]
+    global_context = [np.array(x[8]) for x in batch]
+    global_target = [np.array(x[9]) for x in batch]
+    global_index = [np.array(x[10]) for x in batch]
+    global_gate = [np.array(x[11]) for x in batch]
+    global_dialog_idxs = [np.array(x[12]) for x in batch]
+    global_context_words = [x[13] for x in batch]
+    global_target_words = [x[14] for x in batch]
+    global_profile_memory = [np.array(x[15]) for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
@@ -136,12 +143,12 @@ def collate_fn(batch):
     out_dialog_idxs = np.zeros((len(batch)), dtype=np.int64)
     out_prof_mem = np.zeros((len(batch), profile_len, 3), dtype=np.int64)
 
-    # global_out_context = np.zeros((len(batch), global_max_len_context, 3), dtype=int)
-    # global_out_target = np.zeros((len(batch), global_max_len_target), dtype=np.int64)
-    # global_out_index = np.zeros((len(batch), global_max_len_target), dtype=np.int64)
-    # global_out_gate = np.zeros((len(batch), global_max_len_target))
-    # global_out_dialog_idxs = np.zeros((len(batch)), dtype=np.int64)
-    # global_out_prof_mem = np.zeros((len(batch), global_profile_len, 3), dtype=np.int64)
+    global_out_context = np.zeros((len(batch), global_max_len_context, 3), dtype=int)
+    global_out_target = np.zeros((len(batch), global_max_len_target), dtype=np.int64)
+    global_out_index = np.zeros((len(batch), global_max_len_target), dtype=np.int64)
+    global_out_gate = np.zeros((len(batch), global_max_len_target))
+    global_out_dialog_idxs = np.zeros((len(batch)), dtype=np.int64)
+    global_out_prof_mem = np.zeros((len(batch), global_profile_len, 3), dtype=np.int64)
 
     for i, x in enumerate(batch):
         out_context[i, 0:len(batch[i][0]), :] = context[i]
@@ -154,12 +161,12 @@ def collate_fn(batch):
         out_dialog_idxs[i] = dialog_idxs[i]
         out_prof_mem[i, 0:len(batch[i][7]), :] = profile_memory[i]
 
-        # global_out_context[i, 0:len(batch[i][8]), :] = global_context[i]
-        # global_out_target[i, 0:len(batch[i][9])] = global_target[i]
-        # global_out_index[i, 0:len(batch[i][10])] = global_index[i]
-        # global_out_gate[i, 0:len(batch[i][11])] = global_gate[i]
-        # global_out_dialog_idxs[i] = global_dialog_idxs[i]
-        # global_out_prof_mem[i, 0:len(batch[i][15]), :] = global_profile_memory[i]
+        global_out_context[i, 0:len(batch[i][8]), :] = global_context[i]
+        global_out_target[i, 0:len(batch[i][9])] = global_target[i]
+        global_out_index[i, 0:len(batch[i][10])] = global_index[i]
+        global_out_gate[i, 0:len(batch[i][11])] = global_gate[i]
+        global_out_dialog_idxs[i] = global_dialog_idxs[i]
+        global_out_prof_mem[i, 0:len(batch[i][15]), :] = global_profile_memory[i]
 
 
 
@@ -174,10 +181,10 @@ def collate_fn(batch):
 
     else:
         return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-            out_gate), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words, torch.from_numpy(out_prof_mem)#,\
-               # torch.from_numpy(global_out_context), torch.from_numpy(global_out_target), torch.from_numpy(global_out_index),\
-               # torch.from_numpy(global_out_gate), global_context_lengths, global_target_lengths, global_out_dialog_idxs,\
-               # global_context_words, global_target_words, torch.from_numpy(global_out_prof_mem)
+            out_gate), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words, torch.from_numpy(out_prof_mem),\
+               torch.from_numpy(global_out_context), torch.from_numpy(global_out_target), torch.from_numpy(global_out_index),\
+               torch.from_numpy(global_out_gate), global_context_lengths, global_target_lengths, global_out_dialog_idxs,\
+               global_context_words, global_target_words, torch.from_numpy(global_out_prof_mem)
 
 
 def find_entities(filename):
@@ -306,5 +313,6 @@ def read_dataset(string, kb_entries):
             global_memory[k] = [0]*(maxl - templ) + global_memory[k]
 
     return memory, w2i, global_memory
+
 
 

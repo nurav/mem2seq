@@ -40,10 +40,12 @@ class Model(nn.Module):
 
         self.encoder = Encoder(hops, nwords, gru_size)
         self.profile_encoder = Encoder(hops, nwords, gru_size)
+        self.global_encoder = Encoder(hops, nwords, gru_size)
         self.decoder = Decoder(emb_size, hops, gru_size, nwords)
 
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_enc_profile = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
+        self.optim_enc_global = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
@@ -53,6 +55,8 @@ class Model(nn.Module):
         if use_cuda:
             self.cross_entropy = self.cross_entropy.cuda()
             self.encoder = self.encoder.cuda()
+            self.profile_encoder = self.profile_encoder.cuda()
+            self.global_encoder = self.global_encoder.cuda()
             self.decoder = self.decoder.cuda()
         self.loss = 0
         self.ploss = 0
@@ -95,7 +99,9 @@ class Model(nn.Module):
         return self.loss / self.n, self.ploss / self.n, self.vloss / self.n
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads,
-                    profile_memory):
+                    profile_memory, global_mem):
+
+        self.global_mem = global_mem
 
         # (TODO): remove transpose
         if new_epoch:  # (TODO): Change this part
@@ -116,7 +122,22 @@ class Model(nn.Module):
         h_context = self.encoder(context.transpose(0, 1))
         h_profile = self.profile_encoder(profile_memory.transpose(0, 1))
 
-        h = h_context + h_profile
+
+        ######## global memory ########
+        global_context = self.global_mem[0].type(TYPE)
+        # global_responses = self.global_mem[1].type(TYPE)
+        # global_index = self.global_mem[2].type(TYPE)
+        # global_sentinel = self.global_mem[3].type(TYPE)
+        # global_target_length = self.global_mem[5]
+        # global_profile_memory = self.global_mem[9]
+
+        self.optim_enc_global.zero_grad()
+
+        h_global = self.global_encoder(global_context)
+
+        ####### Decoder ########
+
+        h = h_context + h_profile + h_global
 
         self.decoder.load_memory(context.transpose(0, 1))
         y = torch.from_numpy(np.array([2] * context.size(1), dtype=int)).type(TYPE)
@@ -173,13 +194,19 @@ class Model(nn.Module):
         self.decoder.load_state_dict(torch.load(os.path.join(path, 'decoder.pth')))
 
     def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
-                       target_gate, src_plain):
+                       target_gate, src_plain, profile_memory, global_mem):
 
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
         self.decoder.train(False)
+        self.profile_encoder.train(False)
+        self.global_encoder.train(False)
+
+        ######## global memory ########
+        global_context = global_mem[0].type(TYPE)
+
         # Run words through encoder
-        decoder_hidden = self.encoder(input_batches.transpose(0, 1)).unsqueeze(0)
+        decoder_hidden = self.encoder(input_batches.transpose(0, 1)).unsqueeze(0) + self.profile_encoder(profile_memory.transpose(0, 1)).unsqueeze(0) + self.global_encoder(global_context).unsqueeze(0)
         self.decoder.load_memory(input_batches.transpose(0, 1))
 
         # Prepare input and output variables
@@ -252,6 +279,7 @@ class Model(nn.Module):
         # Set back to training mode
         self.encoder.train(True)
         self.decoder.train(True)
+        self.profile_encoder.train(True)
         return decoded_words  # , acc_ptr, acc_vac
 
     def evaluate(self, dev, avg_best, kb_entries, i2w):
@@ -308,7 +336,7 @@ class Model(nn.Module):
 
             words = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
                                         data_dev[1].transpose(0, 1), data_dev[5],
-                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7])
+                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7], data_dev[9].transpose(0,1), data_dev[10:20])
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
 
