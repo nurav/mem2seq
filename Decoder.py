@@ -6,7 +6,7 @@ use_cuda = torch.cuda.is_available()
 
 class Decoder(nn.Module):
     # def __init__(self, vocab, embedding_dim, hop, dropout, unk_mask):
-    def __init__(self, emb_size, hops, gru_size, nwords):
+    def __init__(self, emb_size, hops, gru_size, nwords, hidden=False):
 
         super(Decoder, self).__init__()
         self.nwords = nwords
@@ -14,23 +14,26 @@ class Decoder(nn.Module):
         self.emb_size = emb_size
         self.gru_size = gru_size
         self.dropout = 0.2
+        self.mult = 1
+        if hidden:
+            self.mult = 2
 
         def init_weights(m):
             if type(m) == torch.nn.Embedding:
-                m.weight.data = torch.normal(0.0, torch.ones(self.nwords, self.emb_size) * 0.1)
+                m.weight.data = torch.normal(0.0, torch.ones(self.nwords, self.mult*self.emb_size) * 0.1)
 
         self.A = torch.nn.ModuleList(
-            [torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
+            [torch.nn.Embedding(self.nwords, self.mult*self.emb_size, padding_idx=0) for h in range(self.hops)])
         self.A.apply(init_weights)
         self.C = torch.nn.ModuleList(
-            [torch.nn.Embedding(self.nwords, self.emb_size, padding_idx=0) for h in range(self.hops)])
+            [torch.nn.Embedding(self.nwords, self.mult*self.emb_size, padding_idx=0) for h in range(self.hops)])
         self.C.apply(init_weights)
         for i in range(self.hops - 1):
             self.C[i].weight = self.A[i + 1].weight
 
         self.soft = nn.Softmax(dim=1)
-        self.lin_vocab = nn.Linear(2 * emb_size, self.nwords)
-        self.gru = nn.GRU(emb_size, emb_size, dropout = self.dropout)
+        self.lin_vocab = nn.Linear(self.mult*2 * emb_size, self.nwords)
+        self.gru = nn.GRU(self.mult*emb_size, self.mult*emb_size, dropout = self.dropout)
 
     def load_memory(self, context):
         size = context.size()  # b * m * 3
@@ -48,11 +51,11 @@ class Decoder(nn.Module):
         context = context.view(size[0], -1)
         for hop in range(self.hops):
             m = self.A[hop](context)
-            m = m.view(size[0], size[1], size[2], self.emb_size)
+            m = m.view(size[0], size[1], size[2], self.mult*self.emb_size)
             m = torch.sum(m, 2)
             self.memories.append(m)
             c = self.C[hop](context)
-            c = c.view(size[0], size[1], size[2], self.emb_size)
+            c = c.view(size[0], size[1], size[2], self.mult*self.emb_size)
             c = torch.sum(c, 2)
         self.memories.append(c)
 

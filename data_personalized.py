@@ -3,8 +3,6 @@ import torch
 
 from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
-import pdb
-from model import Encoder
 
 use_cuda = torch.cuda.is_available()
 

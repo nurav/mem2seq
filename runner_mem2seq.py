@@ -69,7 +69,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             p_ptr, p_vocab, h = self.decoder(context, y, h)
             output_vocab[y_len] = p_vocab
             output_ptr[y_len] = p_ptr
-
+            #TODO: Add teacher forcing ratio
             y = responses[y_len].type(self.TYPE)
             y_len += 1
 

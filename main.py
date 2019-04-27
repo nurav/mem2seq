@@ -6,7 +6,7 @@ def parser():
     parser = argparse.ArgumentParser(description="End-to-End Personalized Task Oriented Dialog System with bAbI and "
                                                  "Personalized bAbI datasets.")
     parser.add_argument("--task", type=str, choices=["1", "2", "3", "4", "5"], help="bAbI task number")
-    parser.add_argument("--model", required=True, choices=["mem2seq", "split_mem", "personal_context"],
+    parser.add_argument("--model", required=True, choices=["mem2seq", "split_mem", "personal_context", "hidden"],
                         help="The model to use")
     parser.add_argument("--data", required=True, choices=["babi", "personal", "personal_context"])
     parser.add_argument("--name", type=str, required=True, help="Identify a run")

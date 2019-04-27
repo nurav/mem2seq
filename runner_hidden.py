@@ -19,7 +19,7 @@ class SplitHiddenRunner(ExperimentRunnerBase):
 
         self.encoder = Encoder(self.hops, self.nwords, self.gru_size)
         self.profile_encoder = Encoder(self.hops, self.nwords, self.gru_size)
-        self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords)
+        self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords, hidden=True)
 
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_enc_profile = torch.optim.Adam(self.profile_encoder.parameters(), lr=0.001)
