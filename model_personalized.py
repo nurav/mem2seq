@@ -99,7 +99,7 @@ class Model(nn.Module):
         return self.loss / self.n, self.ploss / self.n, self.vloss / self.n
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads,
-                    profile_memory, global_mem):
+                    profile_memory, global_mem, i2w):
 
         self.global_mem = global_mem
 
@@ -122,9 +122,11 @@ class Model(nn.Module):
         h_context = self.encoder(context.transpose(0, 1))
         h_profile = self.profile_encoder(profile_memory.transpose(0, 1))
 
+        profile = i2w[profile_memory[0][0][0].item()]+' '+i2w[profile_memory[1][0][0].item()]
 
         ######## global memory ########
-        global_context = self.global_mem[0].type(TYPE)
+        # global_context = self.global_mem[0].type(TYPE)
+        global_context = self.global_mem[profile].unsqueeze(0).type(TYPE)
         # global_responses = self.global_mem[1].type(TYPE)
         # global_index = self.global_mem[2].type(TYPE)
         # global_sentinel = self.global_mem[3].type(TYPE)

@@ -126,6 +126,7 @@ def read_dataset(string, kb_entries):
     _ = w2i['$u']
     _ = w2i['$s']
     current_profile = []
+    global_memory = {}
 
     global profile_len
 
@@ -149,12 +150,16 @@ def read_dataset(string, kb_entries):
                     current_profile.append(w)
                     _ = w2i[w]
 
+                    # global_memory[str(current_profile)] = []
+
                 profile_len = tmp_profile_len if profile_len is None else profile_len
             else:
                 nid, sent = line.split(' ', 1)
                 sent_new = []
                 sent_token = sent.split(' ')
 
+                # if nid != '2':
+                current_profile = ["<pad>"] * profile_len
                 if sent_token[1] == "R_rating":
                     sent_token_2 = sent_token
                     sent_token_2.extend(current_profile)
@@ -169,6 +174,9 @@ def read_dataset(string, kb_entries):
                         _ = w2i[w]
 
         else:
+            nid, sent = line.split(' ', 1)
+            # if nid != '2':
+            current_profile = ["<pad>"] * profile_len
             #profile_len = 0
             sentinel = []  # gate
             idx = []  # index
@@ -193,6 +201,7 @@ def read_dataset(string, kb_entries):
             context_new.extend([['$$$$'] * (profile_len + 3)])
 
             memory.append([context_new, bot, idx, sentinel, dialog_idx])  ##### final output
+            # global_memory[str(current_profile)].append([context_new, bot, idx, sentinel, dialog_idx])
 
             context.extend([[word, '$s', 't' + str(time)]+current_profile for word in bot.split(' ')])
 
@@ -202,6 +211,6 @@ def read_dataset(string, kb_entries):
             _ = w2i['t' + str(time)]
             time += 1
     # pdb.set_trace()
-    return memory, w2i
+    return memory, w2i #, global_memory
 
 

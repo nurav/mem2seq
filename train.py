@@ -57,9 +57,12 @@ else:
     dev, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-dev.txt", kb_entries))
     test, _ = list(read_dataset(f"data/dialog-bAbI-tasks/{args.task}-tst.txt", kb_entries))
 
-data_train = TextDataset(train, w2i, global_memory)
-data_dev = TextDataset(dev, w2i, global_memory_dev)
-data_test = TextDataset(test, w2i, global_memory_test)
+from data_specific_context_static_global_memory import create_global_memory
+static_global_memory, w2i = create_global_memory(f"data/personalized-dialog-dataset/full/{args.task}-trn.txt", w2i)
+# print(len(static_global_memory['female elderly']))
+data_train = TextDataset(train, w2i)#, global_memory)
+# data_dev = TextDataset(dev, w2i, global_memory_dev)
+# data_test = TextDataset(test, w2i, global_memory_test)
 
 i2w = {v: k for k, v in w2i.items()}
 
@@ -70,19 +73,19 @@ train_data_loader = torch.utils.data.DataLoader(dataset=data_train,
                                                 pin_memory=True,
                                                 num_workers=2)
 
-dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
-                                              batch_size=args.batch_size,
-                                              shuffle=False,
-                                              collate_fn=collate_fn,
-                                              pin_memory=True,
-                                              num_workers=2)
-
-test_data_loader = torch.utils.data.DataLoader(dataset=data_test,
-                                              batch_size=args.batch_size,
-                                              shuffle=False,
-                                              collate_fn=collate_fn,
-                                               pin_memory=True,
-                                               num_workers=2)
+# dev_data_loader = torch.utils.data.DataLoader(dataset=data_dev,
+#                                               batch_size=args.batch_size,
+#                                               shuffle=False,
+#                                               collate_fn=collate_fn,
+#                                               pin_memory=True,
+#                                               num_workers=2)
+#
+# test_data_loader = torch.utils.data.DataLoader(dataset=data_test,
+#                                               batch_size=args.batch_size,
+#                                               shuffle=False,
+#                                               collate_fn=collate_fn,
+#                                                pin_memory=True,
+#                                                num_workers=2)
 model = Model(3, len(w2i), 128, 128, w2i)
 
 if args.cuda:
@@ -127,7 +130,7 @@ with open(f"log-{str(datetime.datetime.now())}-{args.name}", 'w') as log_file:
             if args.model_personalized:
                 if args.personalization_type == 'split_memory' or args.personalization_type == 'hidden':
                     loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
-                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1), batch[10:20])
+                              batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8, batch[9].transpose(0,1), static_global_memory, i2w)#, batch[10:20])
                 else:
                     loss, vloss, ploss = model.train_batch(batch[0].transpose(0, 1), batch[1].transpose(0, 1), batch[2].transpose(0, 1),
                                       batch[3].transpose(0, 1), i == 0, batch[4], batch[5], 8)

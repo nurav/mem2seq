@@ -178,6 +178,7 @@ class Model(nn.Module):
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
         self.decoder.train(False)
+        self.profile_encoder.train(False)
         # Run words through encoder
         decoder_hidden = torch.cat((self.encoder(input_batches.transpose(0, 1)).unsqueeze(0),self.profile_encoder(profile_memory.transpose(0, 1)).unsqueeze(0)),dim=2)
         self.decoder.load_memory(input_batches.transpose(0, 1))
@@ -252,6 +253,7 @@ class Model(nn.Module):
         # Set back to training mode
         self.encoder.train(True)
         self.decoder.train(True)
+        self.profile_encoder.train(True)
         return decoded_words  # , acc_ptr, acc_vac
 
     def evaluate(self, dev, avg_best, kb_entries, i2w):
