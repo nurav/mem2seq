@@ -59,21 +59,21 @@ class ExperimentRunnerBase(torch.nn.Module):
                                                              shuffle=True,
                                                              collate_fn=collate_fn,
                                                              pin_memory=True,
-                                                             num_workers=3)
+                                                             num_workers=5)
 
         self.dev_data_loader = torch.utils.data.DataLoader(dataset=self.data_dev,
                                                            batch_size=self.batch_size,
                                                            shuffle=False,
                                                            collate_fn=collate_fn,
                                                            pin_memory=True,
-                                                           num_workers=3)
+                                                           num_workers=5)
 
         self.test_data_loader = torch.utils.data.DataLoader(dataset=self.data_test,
                                                             batch_size=self.batch_size,
                                                             shuffle=False,
                                                             collate_fn=collate_fn,
                                                             pin_memory=True,
-                                                            num_workers=3)
+                                                            num_workers=5)
 
 
         self.args = args
@@ -116,7 +116,11 @@ class ExperimentRunnerBase(torch.nn.Module):
                 for epoch in range(self.epochs):
                     pbar = tqdm(enumerate(self.train_data_loader), total=len(self.train_data_loader))
                     for i, batch in pbar:
-                            # TODO: Continue from here
+                        if self.use_cuda:
+                            batch[0] = batch[0].to('cuda', non_blocking=True)
+                            batch[1] = batch[1].to('cuda', non_blocking=True)
+                            batch[2] = batch[2].to('cuda', non_blocking=True)
+                            batch[3] = batch[3].to('cuda', non_blocking=True)
                         self.train()
                         loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
                         pbar.set_description(self.print_loss())
