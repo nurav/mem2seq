@@ -20,6 +20,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.TYPEF = torch.FloatTensor
         self.use_cuda = torch.cuda.is_available()
         self.out_file = args.out_file
+        self.from_which_enable = args.from_which
 
         if self.use_cuda:
             self.TYPE = torch.cuda.LongTensor
@@ -58,21 +59,21 @@ class ExperimentRunnerBase(torch.nn.Module):
                                                              shuffle=True,
                                                              collate_fn=collate_fn,
                                                              pin_memory=True,
-                                                             num_workers=2)
+                                                             num_workers=3)
 
         self.dev_data_loader = torch.utils.data.DataLoader(dataset=self.data_dev,
                                                            batch_size=self.batch_size,
                                                            shuffle=False,
                                                            collate_fn=collate_fn,
                                                            pin_memory=True,
-                                                           num_workers=2)
+                                                           num_workers=3)
 
         self.test_data_loader = torch.utils.data.DataLoader(dataset=self.data_test,
                                                             batch_size=self.batch_size,
                                                             shuffle=False,
                                                             collate_fn=collate_fn,
                                                             pin_memory=True,
-                                                            num_workers=2)
+                                                            num_workers=3)
 
 
         self.args = args
@@ -111,38 +112,45 @@ class ExperimentRunnerBase(torch.nn.Module):
 
     def trainer(self):
         with open(f"log-{str(datetime.datetime.now())}-{self.name}", 'w') as log_file:
-            for epoch in range(self.epochs):
-                pbar = tqdm(enumerate(self.train_data_loader), total=len(self.train_data_loader))
-                for i, batch in pbar:
-                        # TODO: Continue from here
-                    self.train()
-                    loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
-                    pbar.set_description(self.print_loss())
-                    if self.args.log:
-                        print(f"epoch {epoch}: {self.print_loss()}", file=log_file)
-                    self.train_plot_data['train']['batch'].append(i)
-                    self.train_plot_data['train']['epoch'].append(epoch)
-                    self.train_plot_data['train']['loss'].append(loss)
-                    self.train_plot_data['train']['vocab_loss'].append(vloss)
-                    self.train_plot_data['train']['ptr_loss'].append(ploss)
-                if epoch % self.args.val == 0:
-                    os.makedirs('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch), exist_ok=True)
-                    self.save_models('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch))
-                    self.eval()
-                    self.acc = self.evaluate(self.dev_data_loader, self.avg_best, self.kb_entries, self.i2w)
-                    self.scheduler.step(self.acc)
-                # if 'Mem2Seq' in args['decoder']:
-                #     model.scheduler.step(acc)
-                if self.acc is None or self.avg_best is None:
-                    continue
+            try:
+                for epoch in range(self.epochs):
+                    pbar = tqdm(enumerate(self.train_data_loader), total=len(self.train_data_loader))
+                    for i, batch in pbar:
+                            # TODO: Continue from here
+                        self.train()
+                        loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
+                        pbar.set_description(self.print_loss())
+                        if self.args.log:
+                            print(f"epoch {epoch}: {self.print_loss()}", file=log_file)
+                        self.train_plot_data['train']['batch'].append(i)
+                        self.train_plot_data['train']['epoch'].append(epoch)
+                        self.train_plot_data['train']['loss'].append(loss)
+                        self.train_plot_data['train']['vocab_loss'].append(vloss)
+                        self.train_plot_data['train']['ptr_loss'].append(ploss)
+                    if epoch % self.args.val == 0:
+                        os.makedirs('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch), exist_ok=True)
+                        self.save_models('checkpoints/ckpt-' + str(self.name) + '-' + str(epoch))
+                        self.eval()
+                        self.acc = self.evaluate(self.dev_data_loader, self.avg_best, self.kb_entries, self.i2w, epoch)
+                        self.scheduler.step(self.acc)
+                    # if 'Mem2Seq' in args['decoder']:
+                    #     model.scheduler.step(acc)
+                    if self.acc is None or self.avg_best is None:
+                        continue
 
-                if (self.acc >= self.avg_best):
-                    self.avg_best = self.acc
-                    cnt = 0
-                else:
-                    cnt += 1
-                if cnt == 5: break
-                if self.acc == 1.0: break
+                    if (self.acc >= self.avg_best):
+                        self.avg_best = self.acc
+                        cnt = 0
+                    else:
+                        cnt += 1
+                    if cnt == 5: break
+                    if self.acc == 1.0: break
+            except KeyboardInterrupt as e:
+                out_file = open(f"plot-data-{self.name}.pkl", 'wb')
+                out_file.write(pickle.dumps((self.train_plot_data, self.val_plot_data)))
+                out_file.close()
+                print(e)
+                exit(0)
         out_file = open(f"plot-data-{self.name}.pkl", 'wb')
         out_file.write(pickle.dumps((self.train_plot_data, self.val_plot_data)))
         out_file.close()
@@ -178,7 +186,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.n += 1
         return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
 
-    def evaluate(self, dev, avg_best, kb_entries, i2w):
+    def evaluate(self, dev, avg_best, kb_entries, i2w, epoch):
         self.loss = 0
         self.ploss = 0
         self.vloss = 0
@@ -232,21 +240,28 @@ class ExperimentRunnerBase(torch.nn.Module):
             profile_mem = None
             if self.__class__.__name__.startswith("Split"):
                 profile_mem = data_dev[9].transpose(0, 1)
-            words = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
+            words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
                                         data_dev[1].transpose(0, 1), data_dev[5],
                                         data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7],
                                         profile_mem)
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
+            if self.from_which_enable:
+                transposed_fromwhich = [[row[i] for row in from_whichs] for i in range(len(from_whichs[0]))]
 
             self.out_file = self.name if self.out_file == '' else self.out_file
             with open(self.out_file, 'a') as f:
+                if j==0:
+                    f.write("Epoch {}\n".format(epoch))
                 f.write('------------truth---------------\n\n')
                 [f.write(w + '\n') for w in data_dev[8]]
+
                 f.write('------------response-------------\n\n')
                 [f.write(' '.join(w) + '\n') for w in transposed_words]
                 f.write('\n')
-
+                if self.from_which_enable:
+                    [f.write(" ".join(w) + '\n') for w in transposed_fromwhich]
+                    f.write("\n")
             acc = 0
             w = 0
             temp_gen = []

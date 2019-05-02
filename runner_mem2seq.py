@@ -13,6 +13,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         # Model parameters
         self.gru_size = 128
         self.emb_size = 128
+        #TODO: Try hops 4 with task 3
         self.hops = 3
         self.dropout = 0.2
 
@@ -23,11 +24,13 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
+        self.loss_weighting = False
+        if self.loss_weighting:
+            self.loss_weights = torch.tensor([1.0, 1.0], requires_grad=True)
         if self.use_cuda:
             self.cross_entropy = self.cross_entropy.cuda()
             self.encoder = self.encoder.cuda()
             self.decoder = self.decoder.cuda()
-
 
 
     def train_batch_wrapper(self, batch, new_epoch, clip_grads):
@@ -69,7 +72,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             p_ptr, p_vocab, h = self.decoder(context, y, h)
             output_vocab[y_len] = p_vocab
             output_ptr[y_len] = p_ptr
-            #TODO: Add teacher forcing ratio
+            #TODO: Add teqacher forcing ratio
             y = responses[y_len].type(self.TYPE)
             y_len += 1
 
@@ -85,9 +88,11 @@ class Mem2SeqRunner(ExperimentRunnerBase):
                                     responses.cpu().contiguous().view(-1))
         loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
                                       index.cpu().contiguous().view(-1))
-
-        loss = loss_ptr + loss_v
-
+        if self.loss_weighting:
+            loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
+               torch.log(self.loss_weights[0] * self.loss_weights[1])
+        else:
+            loss = loss_ptr + loss_v
         loss.backward()
         ec = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 10.0)
         dc = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 10.0)
@@ -180,7 +185,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         # Set back to training mode
         self.encoder.train(True)
         self.decoder.train(True)
-        return decoded_words  # , acc_ptr, acc_vac
+        return decoded_words, self.from_whichs  # , acc_ptr, acc_vac
 
     def save_models(self, path):
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))

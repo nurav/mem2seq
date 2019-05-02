@@ -196,7 +196,7 @@ class SplitMemRunner(ExperimentRunnerBase):
         self.encoder.train(True)
         self.decoder.train(True)
         self.profile_encoder.train(True)
-        return decoded_words  # , acc_ptr, acc_vac
+        return decoded_words, self.from_whichs  # , acc_ptr, acc_vac
 
     def save_models(self, path):
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))
