@@ -6,8 +6,6 @@ from Encoder import Encoder
 from Decoder import Decoder
 import numpy as np
 import os.path
-
-
 class SplitHiddenRunner(ExperimentRunnerBase):
     def __init__(self, args):
         super(SplitHiddenRunner, self).__init__(args)
@@ -75,6 +73,9 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         h = h.unsqueeze(0)
         output_vocab = torch.zeros(max(target_lengths), context.size(1), self.nwords)
         output_ptr = torch.zeros(max(target_lengths), context.size(1), context.size(0))
+        if self.use_cuda:
+            output_vocab = output_vocab.cuda()
+            output_ptr = output_ptr.cuda()
         while y_len < responses.size(0):  # TODO: Add EOS condition
             p_ptr, p_vocab, h = self.decoder(context, y, h)
             output_vocab[y_len] = p_vocab
@@ -86,18 +87,22 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         # print(loss)
         mask_v = torch.ones(output_vocab.size())
         mask_p = torch.ones(output_ptr.size())
-
+        if self.use_cuda:
+            mask_p = mask_p.cuda()
+            mask_v = mask_v.cuda()
         for i in range(responses.size(1)):
             mask_v[target_lengths[i]:, i, :] = 0
             mask_p[target_lengths[i]:, i, :] = 0
 
         loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords),
-                                    responses.cpu().contiguous().view(-1))
+                                    responses.contiguous().view(-1))
         loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
-                                      index.cpu().contiguous().view(-1))
-
-        loss = loss_ptr + loss_v
-
+                                          index.contiguous().view(-1))
+        if self.loss_weighting:
+            loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
+               torch.log(self.loss_weights[0] * self.loss_weights[1])
+        else:
+            loss = loss_ptr + loss_v
         loss.backward()
         ec = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 10.0)
         dc = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 10.0)
@@ -184,7 +189,11 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         loss_ptr = self.cross_entropy(all_decoder_outputs_ptr.contiguous().view(-1, input_batches.size(0)),
                                       target_index.contiguous().view(-1))
 
-        loss = loss_ptr + loss_v
+        if self.loss_weighting:
+            loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
+               torch.log(self.loss_weights[0] * self.loss_weights[1])
+        else:
+            loss = loss_ptr + loss_v
 
         self.loss += loss.item()
         self.vloss += loss_v.item()
@@ -196,7 +205,6 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         self.decoder.train(True)
         self.profile_encoder.train(True)
         return decoded_words, self.from_whichs  # , acc_ptr, acc_vac
-
 
     def save_models(self, path):
         torch.save(self.encoder.state_dict(), os.path.join(path, 'encoder.pth'))

@@ -91,10 +91,6 @@ def collate_fn(batch):
         out_dialog_idxs[i] = dialog_idxs[i]
         out_prof_mem[i, 0:len(batch[i][7]), :] = profile_memory[i]
 
-    if use_cuda:
-        return torch.from_numpy(out_context).cuda(), torch.from_numpy(out_target).cuda(), torch.from_numpy(out_index).cuda(), \
-           torch.from_numpy(out_gate).cuda(), context_lengths, target_lengths, torch.from_numpy(out_dialog_idxs).cuda(), context_words, target_words, torch.from_numpy(out_prof_mem).cuda()
-    else:
         return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
             out_gate), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words, torch.from_numpy(out_prof_mem)
 

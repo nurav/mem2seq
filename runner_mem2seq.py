@@ -24,11 +24,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
-        self.loss_weighting = False
-        if self.loss_weighting:
-            self.loss_weights = torch.tensor([1.0, 1.0], requires_grad=True)
-            if self.use_cuda:
-                self.loss_weights = self.loss_weights.cuda()
+
         if self.use_cuda:
             self.cross_entropy = self.cross_entropy.cuda()
             self.encoder = self.encoder.cuda()
@@ -92,20 +88,11 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             mask_v[target_lengths[i]:, i, :] = 0
             mask_p[target_lengths[i]:, i, :] = 0
 
-
-        if self.use_cuda:
-            loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords),
+        loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords),
                                         responses.contiguous().view(-1))
-        else:
-            loss_v = self.cross_entropy(output_vocab.contiguous().view(-1, self.nwords),
-                                        responses.cpu().contiguous().view(-1))
 
-        if self.use_cuda:
-            loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
+        loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
                                           index.contiguous().view(-1))
-        else:
-            loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
-                                          index.cpu().contiguous().view(-1))
         if self.loss_weighting:
             loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
                torch.log(self.loss_weights[0] * self.loss_weights[1])
@@ -193,7 +180,11 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         loss_ptr = self.cross_entropy(all_decoder_outputs_ptr.contiguous().view(-1, input_batches.size(0)),
                                       target_index.contiguous().view(-1))
 
-        loss = loss_ptr + loss_v
+        if self.loss_weighting:
+            loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
+               torch.log(self.loss_weights[0] * self.loss_weights[1])
+        else:
+            loss = loss_ptr + loss_v
 
         self.loss += loss.item()
         self.vloss += loss_v.item()

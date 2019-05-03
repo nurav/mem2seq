@@ -9,6 +9,7 @@ def parser():
     parser.add_argument("--model", required=True, choices=["mem2seq", "split_mem", "personal_context", "hidden"],
                         help="The model to use")
     parser.add_argument("--data", required=True, choices=["babi", "personal", "personal_context"])
+    parser.add_argument("--small", action="store_true")
     parser.add_argument("--name", type=str, required=True, help="Identify a run")
     parser.add_argument("--log", action='store_true', default=True)
     parser.add_argument("--lr", type=float, default=0.001)

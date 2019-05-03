@@ -21,6 +21,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.use_cuda = torch.cuda.is_available()
         self.out_file = args.out_file
         self.from_which_enable = args.from_which
+        self.small_data = args.small
 
         if self.use_cuda:
             self.TYPE = torch.cuda.LongTensor
@@ -41,10 +42,12 @@ class ExperimentRunnerBase(torch.nn.Module):
 
         if data.startswith("personal"):
             data_dir = "data/personalized-dialog-dataset/full"
+            if self.small_data:
+                data_dir = "data/personalized-dialog-dataset/small"
             kb_path = "personalized-dialog-kb-all.txt"
             data_file_prefix = self.getPersonalDataNames(args.task)
 
-        self.kb_entries = find_entities(os.path.join(data_dir, kb_path))
+        self.kb_entries = find_entities(os.path.join(data_dir, "../full", kb_path))
         train, self.w2i = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
         dev, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
         test, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
@@ -109,6 +112,11 @@ class ExperimentRunnerBase(torch.nn.Module):
                 'vocab_loss': [],
                 'ptr_loss': [],
             }}
+        self.loss_weighting = False
+        if self.loss_weighting:
+            self.loss_weights = torch.tensor([1.0, 1.0], requires_grad=True)
+            if self.use_cuda:
+                self.loss_weights = self.loss_weights.cuda()
 
     def trainer(self):
         with open(f"log-{str(datetime.datetime.now())}-{self.name}", 'w') as log_file:
@@ -121,6 +129,8 @@ class ExperimentRunnerBase(torch.nn.Module):
                             batch[1] = batch[1].to('cuda', non_blocking=True)
                             batch[2] = batch[2].to('cuda', non_blocking=True)
                             batch[3] = batch[3].to('cuda', non_blocking=True)
+                            if self.__class__.__name__.startswith("Split"):
+                                batch[9] = batch[9].to('cuda', non_blocking=True)
                         self.train()
                         loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
                         pbar.set_description(self.print_loss())
@@ -243,7 +253,16 @@ class ExperimentRunnerBase(torch.nn.Module):
         for j, data_dev in pbar:
             profile_mem = None
             if self.__class__.__name__.startswith("Split"):
-                profile_mem = data_dev[9].transpose(0, 1)
+                profile_mem = data_dev[9]
+            if self.use_cuda:
+                data_dev[0] = data_dev[0].to('cuda', non_blocking=True)
+                data_dev[1] = data_dev[1].to('cuda', non_blocking=True)
+                data_dev[2] = data_dev[2].to('cuda', non_blocking=True)
+                data_dev[3] = data_dev[3].to('cuda', non_blocking=True)
+                if self.__class__.__name__.startswith("Split"):
+                    profile_mem = profile_mem.to('cuda', non_blocking=True)
+            if profile_mem != None:
+                profile_mem = profile_mem.transpose(0,1)
             words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
                                         data_dev[1].transpose(0, 1), data_dev[5],
                                         data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7],
