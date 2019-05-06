@@ -23,7 +23,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
         if self.loss_weighting:
-            self.optim_loss_weights = torch.optim.Adam([self.loss_weights], lr=0.001)
+            self.optim_loss_weights = torch.optim.Adam([self.loss_weights], lr=0.0001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
 
