@@ -22,6 +22,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+        if self.loss_weighting:
+            self.optim_loss_weights = torch.optim.Adam([self.loss_weights], lr=0.001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
 
@@ -29,6 +31,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             self.cross_entropy = self.cross_entropy.cuda()
             self.encoder = self.encoder.cuda()
             self.decoder = self.decoder.cuda()
+            if self.loss_weighting:
+                self.loss_weights = self.loss_weights.cuda()
 
 
 
@@ -58,6 +62,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
         self.optim_enc.zero_grad()
         self.optim_dec.zero_grad()
+        if self.loss_weighting:
+            self.optim_loss_weights.zero_grad()
 
         h = self.encoder(context.transpose(0, 1))
         self.decoder.load_memory(context.transpose(0, 1))
@@ -103,6 +109,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         dc = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 10.0)
         self.optim_enc.step()
         self.optim_dec.step()
+        if self.loss_weighting:
+            self.optim_loss_weights.step()
 
         self.loss += loss.item()
         self.vloss += loss_v.item()

@@ -22,6 +22,9 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_enc_profile = torch.optim.Adam(self.profile_encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
+
+        if self.loss_weighting:
+            self.optim_loss_weights = torch.optim.Adam([self.loss_weights], lr=0.001)
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optim_dec, mode='max', factor=0.5, patience=1,
                                                         min_lr=0.0001, verbose=True)
 
@@ -30,6 +33,7 @@ class SplitHiddenRunner(ExperimentRunnerBase):
             self.encoder = self.encoder.cuda()
             self.decoder = self.decoder.cuda()
             self.profile_encoder = self.profile_encoder.cuda()
+
 
     def train_batch_wrapper(self, batch, new_epoch, clip_grads):
         context = batch[0].transpose(0, 1)
@@ -60,6 +64,8 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         self.optim_enc.zero_grad()
         self.optim_dec.zero_grad()
         self.optim_enc_profile.zero_grad()
+        if self.loss_weighting:
+            self.optim_loss_weights.zero_grad()
 
         h_context = self.encoder(context.transpose(0, 1))
         h_profile = self.profile_encoder(profile_memory.transpose(0, 1))
@@ -110,6 +116,8 @@ class SplitHiddenRunner(ExperimentRunnerBase):
         self.optim_enc.step()
         self.optim_dec.step()
         self.optim_enc_profile.step()
+        if self.loss_weighting:
+            self.optim_loss_weights.step()
 
         self.loss += loss.item()
         self.vloss += loss_v.item()

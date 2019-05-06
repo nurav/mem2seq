@@ -16,6 +16,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.task = args.task
         self.batch_size = args.batch_size
         self.epochs = args.epochs
+        self.loss_weighting = args.loss_weighting
         self.TYPE = torch.LongTensor
         self.TYPEF = torch.FloatTensor
         self.use_cuda = torch.cuda.is_available()
@@ -112,9 +113,8 @@ class ExperimentRunnerBase(torch.nn.Module):
                 'vocab_loss': [],
                 'ptr_loss': [],
             }}
-        self.loss_weighting = False
         if self.loss_weighting:
-            self.loss_weights = torch.tensor([1.0, 1.0], requires_grad=True)
+            self.loss_weights = torch.nn.Parameter(torch.tensor([1.0, 1.0], requires_grad=True))
             if self.use_cuda:
                 self.loss_weights = self.loss_weights.cuda()
 

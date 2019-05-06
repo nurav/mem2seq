@@ -20,6 +20,7 @@ def parser():
     parser.add_argument("--test", action="store_true", default=False)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--out_file", type=str, default='')
+    parser.add_argument("--loss_weighting", action="store_true", help="Weigh vocab and pointer losses")
     parser.add_argument("--from_which", action="store_true", help="Print out debug info to determine whether the "
                                                                   "output word was generated from memory or vocab")
 
