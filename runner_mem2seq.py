@@ -36,7 +36,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
 
 
-    def train_batch_wrapper(self, batch, new_epoch, clip_grads, kb_entry):
+    def train_batch_wrapper(self, batch, new_epoch, clip_grads):
         context = batch[0].transpose(0, 1)
         responses = batch[1].transpose(0, 1)
         index = batch[2].transpose(0, 1)
