@@ -36,13 +36,14 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
 
 
-    def train_batch_wrapper(self, batch, new_epoch, clip_grads):
+    def train_batch_wrapper(self, batch, new_epoch, clip_grads, kb_entry):
         context = batch[0].transpose(0, 1)
         responses = batch[1].transpose(0, 1)
         index = batch[2].transpose(0, 1)
         sentinel = batch[3].transpose(0, 1)
         context_lengths = batch[4]
         target_lengths = batch[5]
+        self.kb_entry = kb_entry
         return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths,
@@ -102,6 +103,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         if self.loss_weighting:
             loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
                torch.log(self.loss_weights[0] * self.loss_weights[1])
+            loss_ptr = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0])
+            loss_v = loss_v/(2*self.loss_weights[1]*self.loss_weights[1])
         else:
             loss = loss_ptr + loss_v
         loss.backward()
@@ -160,6 +163,8 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             top_ptr_i = torch.gather(input_batches[:, :, 0], 0, Variable(toppi.view(1, -1))).transpose(0, 1)
             next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i] - 1) else topvi[i].item() for i in
                        range(batch_size)]
+            # if next_in in self.kb_entry.keys():
+            #     ptr_distr.append([next_in, decoder_vacab.data])
 
             decoder_input = Variable(torch.LongTensor(next_in))  # Chosen word is next input
             if self.use_cuda: decoder_input = decoder_input.cuda()
