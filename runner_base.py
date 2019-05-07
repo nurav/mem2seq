@@ -49,9 +49,9 @@ class ExperimentRunnerBase(torch.nn.Module):
             data_file_prefix = self.getPersonalDataNames(args.task)
 
         self.kb_entries = find_entities(os.path.join(data_dir, "../full", kb_path))
-        train, self.w2i = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
-        dev, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
-        test, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
+        train, self.w2i, self.kb_entry = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
+        dev, _ , _= list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
+        test, _, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
 
         self.data_train = TextDataset(train, self.w2i)
         self.data_dev = TextDataset(dev, self.w2i)
@@ -132,7 +132,7 @@ class ExperimentRunnerBase(torch.nn.Module):
                             if self.__class__.__name__.startswith("Split"):
                                 batch[9] = batch[9].to('cuda', non_blocking=True)
                         self.train()
-                        loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
+                        loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8, self.kb_entry)
                         pbar.set_description(self.print_loss())
                         if self.args.log:
                             print(f"epoch {epoch}: {self.print_loss()}", file=log_file)
@@ -198,7 +198,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         print_ploss = self.ploss / self.n
         print_vloss = self.vloss / self.n
         self.n += 1
-        return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
+        return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}, LW: {:.3f} {:.3f}'.format(print_loss_avg, print_vloss, print_ploss, self.loss_weights[0], self.loss_weights[1])
 
     def evaluate(self, dev, avg_best, kb_entries, i2w, epoch):
         self.loss = 0

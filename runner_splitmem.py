@@ -110,6 +110,8 @@ class SplitMemRunner(ExperimentRunnerBase):
             loss = loss_ptr / (2 * self.loss_weights[0] * self.loss_weights[0]) + loss_v / (
                         2 * self.loss_weights[1] * self.loss_weights[1]) + \
                    torch.log(self.loss_weights[0] * self.loss_weights[1])
+            loss_ptr = loss_ptr / (2 * self.loss_weights[0] * self.loss_weights[0])
+            loss_v = loss_v / (2 * self.loss_weights[1] * self.loss_weights[1])
         else:
             loss = loss_ptr + loss_v
 
