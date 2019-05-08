@@ -43,7 +43,6 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         sentinel = batch[3].transpose(0, 1)
         context_lengths = batch[4]
         target_lengths = batch[5]
-        self.kb_entry = kb_entry
         return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths,

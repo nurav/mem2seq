@@ -114,9 +114,10 @@ class ExperimentRunnerBase(torch.nn.Module):
                 'ptr_loss': [],
             }}
         if self.loss_weighting:
-            self.loss_weights = torch.nn.Parameter(torch.tensor([1.0, 1.0], requires_grad=True))
+            self.loss_weights = torch.tensor([1.0, 1.0], requires_grad=True)
             if self.use_cuda:
                 self.loss_weights = self.loss_weights.cuda()
+            self.loss_weights = torch.nn.Parameter(self.loss_weights)
 
     def trainer(self):
         with open(f"log-{str(datetime.datetime.now())}-{self.name}", 'w') as log_file:
