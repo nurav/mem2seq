@@ -41,11 +41,13 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         responses = batch[1].transpose(0, 1)
         index = batch[2].transpose(0, 1)
         sentinel = batch[3].transpose(0, 1)
-        context_lengths = batch[4]
-        target_lengths = batch[5]
-        return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
+        resto_sentinel = batch[4].transpose(0, 1)
+        context_lengths = batch[5]
+        target_lengths = batch[6]
+        return self.train_batch(context, responses, index, sentinel, resto_sentinel, new_epoch, context_lengths,
+                                target_lengths, clip_grads)
 
-    def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths,
+    def train_batch(self, context, responses, index, sentinel, resto_sentinel, new_epoch, context_lengths, target_lengths,
                     clip_grads):
 
         # (TODO): remove transpose
@@ -59,6 +61,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         responses = responses.type(self.TYPE)
         index = index.type(self.TYPE)
         sentinel = sentinel.type(self.TYPE)
+        resto_sentinel = resto_sentinel.type(self.TYPE)
 
         self.optim_enc.zero_grad()
         self.optim_dec.zero_grad()

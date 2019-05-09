@@ -130,8 +130,9 @@ class ExperimentRunnerBase(torch.nn.Module):
                             batch[1] = batch[1].to('cuda', non_blocking=True)
                             batch[2] = batch[2].to('cuda', non_blocking=True)
                             batch[3] = batch[3].to('cuda', non_blocking=True)
+                            batch[4] = batch[4].to('cuda', non_blocking=True)
                             if self.__class__.__name__.startswith("Split"):
-                                batch[9] = batch[9].to('cuda', non_blocking=True)
+                                batch[10] = batch[10].to('cuda', non_blocking=True)
                         self.train()
                         loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
                         pbar.set_description(self.print_loss())

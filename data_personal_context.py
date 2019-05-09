@@ -23,6 +23,7 @@ class TextDataset(Dataset):
             bot_seq = m[1]
             index_seq = m[2]
             gate_seq = m[3]
+            resto_seq = m[4]
             # print(len(context_seq), len(bot_seq), len(index_seq), len(gate_seq))
             # print(m)
             new_context_seq = []
@@ -38,6 +39,7 @@ class TextDataset(Dataset):
             new_bot_seq.append(self.w2i['<eos>'])
             index_seq.append(len(context_seq) - 1)
             gate_seq.append(False)
+            resto_seq.append(False)
             m.append(new_context_seq)
             m.append(new_bot_seq)
 
@@ -62,14 +64,16 @@ def collate_fn(batch):
     target = [np.array(x[1]) for x in batch]
     index = [np.array(x[2]) for x in batch]
     gate = [np.array(x[3]) for x in batch]
-    dialog_idxs = [np.array(x[4]) for x in batch]
-    context_words = [x[5] for x in batch]
-    target_words = [x[6] for x in batch]
+    resto_sentinel = [np.array(x[4]) for x in batch]
+    dialog_idxs = [np.array(x[5]) for x in batch]
+    context_words = [x[6] for x in batch]
+    target_words = [x[7] for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, profile_len + 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
     out_index = np.zeros((len(batch), max_len_target), dtype=np.int64)
     out_gate = np.zeros((len(batch), max_len_target))
+    out_resto = np.zeros((len(batch), max_len_target))
     out_dialog_idxs = np.zeros((len(batch)), dtype=np.int64)
 
     for i, x in enumerate(batch):
@@ -77,10 +81,11 @@ def collate_fn(batch):
         out_target[i, 0:len(batch[i][1])] = target[i]
         out_index[i, 0:len(batch[i][2])] = index[i]
         out_gate[i, 0:len(batch[i][3])] = gate[i]
+        out_gate[i, 0:len(batch[i][4])] = resto_sentinel[i]
         out_dialog_idxs[i] = dialog_idxs[i]
 
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-        out_gate), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words
+        out_gate), torch.from_numpy(out_resto), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words
 
 
 def find_entities(filename):
@@ -165,6 +170,7 @@ def read_dataset(string, kb_entries):
         else:
             #profile_len = 0
             sentinel = []  # gate
+            resto_sentinel = []  # for activated when a restaurant there
             idx = []  # index
 
             user, bot = line.split('\t')
@@ -179,14 +185,16 @@ def read_dataset(string, kb_entries):
             for word in bot.split(' '):
                 index = [i for i, w in enumerate(context) if w[0] == word]
                 # print(index)
+                resto_sentinel.append(word.startswith("resto_"))
                 idx.append(max(index) if index else len(context))
                 sentinel.append(bool(index))
+                #resto_sentinel.append(bool(resto_index))
 
             context_new = context.copy()
 
             context_new.extend([['$$$$'] * (profile_len + 3)])
 
-            memory.append([context_new, bot, idx, sentinel, dialog_idx])  ##### final output
+            memory.append([context_new, bot, idx, sentinel, resto_sentinel, dialog_idx])  ##### final output
 
             context.extend([[word, '$s', 't' + str(time)]+current_profile for word in bot.split(' ')])
 
