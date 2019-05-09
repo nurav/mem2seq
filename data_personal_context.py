@@ -47,7 +47,8 @@ class TextDataset(Dataset):
         return len(self.memory)
 
     def __getitem__(self, idx):
-        return self.memory[idx][5], self.memory[idx][6], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4], self.memory[idx][0], self.memory[idx][1]
+        return self.memory[idx][6], self.memory[idx][7], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4],\
+               self.memory[idx][5], self.memory[idx][0], self.memory[idx][1]
 
 
 def collate_fn(batch):
