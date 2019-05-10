@@ -179,12 +179,25 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             top_resto_i = torch.gather(input_batches[:, :, 0], 0, Variable(topri.view(1, -1))).transpose(0, 1)
             next_in =[]
             for i in range(batch_size):
-                if topri[i].item() < input_lengths[i] - 1:
-                    next_in.append(top_resto_i[i].item())
-                elif toppi[i].item() < input_lengths[i] - 1:
-                    next_in.append(top_ptr_i[i].item())
+                select_from_resto_first = True
+                if (select_from_resto_first):
+                    if topri[i].item() < input_lengths[i] - 1:
+                        next_in.append(top_resto_i[i].item())
+                    elif toppi[i].item() < input_lengths[i] - 1:
+                        next_in.append(top_ptr_i[i].item())
+                    else:
+                        next_in.append(topvi[i].item())
                 else:
-                    next_in.append(topvi[i].item())
+
+                    if toppi[i].item() < input_lengths[i] - 1:
+                        word = self.i2w[top_ptr_i[i].item()]
+                        if word.startswith("resto"):
+                            next_in.append(top_resto_i[i].item())
+                        else:
+                            next_in.append(top_ptr_i[i].item())
+
+                    else:
+                        next_in.append(topvi[i].item())
 
             # next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i] - 1) else topvi[i].item() for i in
             #            range(batch_size)]
