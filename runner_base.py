@@ -199,7 +199,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         print_ploss = self.ploss / self.n
         print_vloss = self.vloss / self.n
         self.n += 1
-        p_str = 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}, RL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss, print_rloss)
+        p_str = 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss)
         if self.loss_weighting:
             p_str += ', LW: {:.3f} {:.3f}'.format(self.loss_weights[0], self.loss_weights[1])
         return p_str
