@@ -48,10 +48,12 @@ class Decoder(nn.Module):
             context = context * a.long()
 
         self.memories = []
+        self.profile = []
         context = context.view(size[0], -1)
         for hop in range(self.hops):
             m = self.A[hop](context)
             m = m.view(size[0], size[1], size[2], self.mult*self.emb_size)
+            self.profile.append(torch.sum(m[:,:,3:,:],2))
             m = torch.sum(m, 2)
             self.memories.append(m)
             c = self.C[hop](context)
@@ -64,13 +66,18 @@ class Decoder(nn.Module):
         _, h = self.gru(m, h_)
 
         q = [h.squeeze(0)]
+        hprofile = self.profile[-1][:,0,:].unsqueeze(2)
         for hop in range(self.hops):
             p = torch.sum(self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop]), 2)
             attn = self.soft(p)
             o = torch.bmm(attn.unsqueeze(1), self.memories[hop + 1]).squeeze(1)
-            q.append(q[-1] + o)
+
             if hop == 0:
                 p_vocab = self.lin_vocab(torch.cat((q[0], o), 1))
+            if hop == self.hops - 1:
+                p_ = self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop])
+                p_resto = torch.bmm(p_, hprofile).squeeze(2)
+            q.append(q[-1] + o)
 
         p_ptr = p
-        return p_ptr, p_vocab, h
+        return p_ptr, p_vocab, p_resto, h

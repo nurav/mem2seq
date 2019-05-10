@@ -41,13 +41,13 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         responses = batch[1].transpose(0, 1)
         index = batch[2].transpose(0, 1)
         sentinel = batch[3].transpose(0, 1)
-        resto_sentinel = batch[4].transpose(0, 1)
+        resto_index = batch[4].transpose(0, 1)
         context_lengths = batch[5]
         target_lengths = batch[6]
-        return self.train_batch(context, responses, index, sentinel, resto_sentinel, new_epoch, context_lengths,
+        return self.train_batch(context, responses, index, sentinel, resto_index, new_epoch, context_lengths,
                                 target_lengths, clip_grads)
 
-    def train_batch(self, context, responses, index, sentinel, resto_sentinel, new_epoch, context_lengths, target_lengths,
+    def train_batch(self, context, responses, index, sentinel, resto_index, new_epoch, context_lengths, target_lengths,
                     clip_grads):
 
         # (TODO): remove transpose
@@ -55,13 +55,14 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             self.loss = 0
             self.ploss = 0
             self.vloss = 0
+            self.rloss = 0
             self.n = 1
 
         context = context.type(self.TYPE)
         responses = responses.type(self.TYPE)
         index = index.type(self.TYPE)
         sentinel = sentinel.type(self.TYPE)
-        resto_sentinel = resto_sentinel.type(self.TYPE)
+        resto_index = resto_index.type(self.TYPE)
 
         self.optim_enc.zero_grad()
         self.optim_dec.zero_grad()
@@ -76,13 +77,16 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         h = h.unsqueeze(0)
         output_vocab = torch.zeros(max(target_lengths), context.size(1), self.nwords)
         output_ptr = torch.zeros(max(target_lengths), context.size(1), context.size(0))
+        output_resto = torch.zeros(max(target_lengths), context.size(1), context.size(0))
         if self.use_cuda:
             output_vocab = output_vocab.cuda()
             output_ptr = output_ptr.cuda()
+            output_resto = output_resto.cuda()
         while y_len < responses.size(0):  # TODO: Add EOS condition
-            p_ptr, p_vocab, h = self.decoder(context, y, h)
+            p_ptr, p_vocab, p_resto, h = self.decoder(context, y, h)
             output_vocab[y_len] = p_vocab
             output_ptr[y_len] = p_ptr
+            output_resto[y_len] = p_resto
             #TODO: Add teqacher forcing ratio
             y = responses[y_len].type(self.TYPE)
             y_len += 1
@@ -102,13 +106,16 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
         loss_ptr = self.cross_entropy(output_ptr.contiguous().view(-1, context.size(0)),
                                           index.contiguous().view(-1))
+        loss_resto = self.cross_entropy(output_resto.contiguous().view(-1, context.size(0)),
+                                          resto_index.contiguous().view(-1))
+        #loss_resto = self.cross_entropy()
         if self.loss_weighting:
             loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
                torch.log(self.loss_weights[0] * self.loss_weights[1])
             loss_ptr = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0])
             loss_v = loss_v/(2*self.loss_weights[1]*self.loss_weights[1])
         else:
-            loss = loss_ptr + loss_v
+            loss = loss_ptr + loss_v + loss_resto
         loss.backward()
         ec = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 10.0)
         dc = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 10.0)
@@ -120,11 +127,14 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.loss += loss.item()
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
+        self.rloss += loss_resto.item()
 
         return loss.item(), loss_v.item(), loss_ptr.item()
 
-    def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
+    def evaluate_batch(self, batch_size, input_batches, resto_index, input_lengths, target_batches, target_lengths, target_index,
                        target_gate, src_plain, profile_memory=None):
+
+        resto_index = resto_index.type(self.TYPE)
 
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
@@ -139,6 +149,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         decoded_words = []
         all_decoder_outputs_vocab = Variable(torch.zeros(max(target_lengths), batch_size, self.nwords))
         all_decoder_outputs_ptr = Variable(torch.zeros(max(target_lengths), batch_size, input_batches.size(0)))
+        all_decoder_outputs_resto = Variable(torch.zeros(max(target_lengths), batch_size, input_batches.size(0)))
         # all_decoder_outputs_gate = Variable(torch.zeros(self.max_r, batch_size))
         # Move new Variables to CUDA
 
@@ -157,14 +168,26 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         acc_gate, acc_ptr, acc_vac = 0.0, 0.0, 0.0
         # Run through decoder one time step at a time
         for t in range(max(target_lengths)):
-            decoder_ptr, decoder_vacab, decoder_hidden = self.decoder(input_batches, decoder_input, decoder_hidden)
-            all_decoder_outputs_vocab[t] = decoder_vacab
-            topv, topvi = decoder_vacab.data.topk(1)
+            decoder_ptr, decoder_vocab, decoder_resto, decoder_hidden = self.decoder(input_batches, decoder_input, decoder_hidden)
+            all_decoder_outputs_vocab[t] = decoder_vocab
+            topv, topvi = decoder_vocab.data.topk(1)
             all_decoder_outputs_ptr[t] = decoder_ptr
             topp, toppi = decoder_ptr.data.topk(1)
             top_ptr_i = torch.gather(input_batches[:, :, 0], 0, Variable(toppi.view(1, -1))).transpose(0, 1)
-            next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i] - 1) else topvi[i].item() for i in
-                       range(batch_size)]
+            all_decoder_outputs_resto[t] = decoder_resto
+            topr, topri = decoder_resto.data.topk(1)
+            top_resto_i = torch.gather(input_batches[:, :, 0], 0, Variable(topri.view(1, -1))).transpose(0, 1)
+            next_in =[]
+            for i in range(batch_size):
+                if topri[i].item() < input_lengths[i] - 1:
+                    next_in.append(top_resto_i[i].item())
+                elif toppi[i].item() < input_lengths[i] - 1:
+                    next_in.append(top_ptr_i[i].item())
+                else:
+                    next_in.append(topvi[i].item())
+
+            # next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i] - 1) else topvi[i].item() for i in
+            #            range(batch_size)]
             # if next_in in self.kb_entry.keys():
             #     ptr_distr.append([next_in, decoder_vacab.data])
 
@@ -174,7 +197,10 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             temp = []
             from_which = []
             for i in range(batch_size):
-                if (toppi[i].item() < len(p[i]) - 1):
+                if topri[i].item() < len(p[i]) - 1:
+                    temp.append(p[i][topri[i].item()])
+                    from_which.append('r')
+                elif (toppi[i].item() < len(p[i]) - 1):
                     temp.append(p[i][toppi[i].item()])
                     from_which.append('p')
                 else:
@@ -194,16 +220,18 @@ class Mem2SeqRunner(ExperimentRunnerBase):
                                     target_batches.contiguous().view(-1))
         loss_ptr = self.cross_entropy(all_decoder_outputs_ptr.contiguous().view(-1, input_batches.size(0)),
                                       target_index.contiguous().view(-1))
-
+        loss_resto = self.cross_entropy(all_decoder_outputs_resto.contiguous().view(-1, input_batches.size(0)),
+                                      resto_index.contiguous().view(-1))
         if self.loss_weighting:
             loss = loss_ptr/(2*self.loss_weights[0]*self.loss_weights[0]) + loss_v/(2*self.loss_weights[1]*self.loss_weights[1]) + \
                torch.log(self.loss_weights[0] * self.loss_weights[1])
         else:
-            loss = loss_ptr + loss_v
+            loss = loss_ptr + loss_v + loss_resto
 
         self.loss += loss.item()
         self.vloss += loss_v.item()
         self.ploss += loss_ptr.item()
+        self.rloss += loss_resto.item()
         self.n += 1
 
         # Set back to training mode

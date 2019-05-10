@@ -199,8 +199,12 @@ class ExperimentRunnerBase(torch.nn.Module):
         print_loss_avg = self.loss / self.n
         print_ploss = self.ploss / self.n
         print_vloss = self.vloss / self.n
+        print_rloss = self.rloss / self.n
         self.n += 1
-        return 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}, LW: {:.3f} {:.3f}'.format(print_loss_avg, print_vloss, print_ploss, self.loss_weights[0], self.loss_weights[1])
+        p_str = 'L:{:.5f}, VL:{:.5f}, PL:{:.5f}, RL:{:.5f}'.format(print_loss_avg, print_vloss, print_ploss, print_rloss)
+        if self.loss_weighting:
+            p_str += ', LW: {:.3f} {:.3f}'.format(self.loss_weights[0], self.loss_weights[1])
+        return p_str
 
     def evaluate(self, dev, avg_best, kb_entries, i2w, epoch):
         self.loss = 0
@@ -261,14 +265,14 @@ class ExperimentRunnerBase(torch.nn.Module):
                 data_dev[1] = data_dev[1].to('cuda', non_blocking=True)
                 data_dev[2] = data_dev[2].to('cuda', non_blocking=True)
                 data_dev[3] = data_dev[3].to('cuda', non_blocking=True)
+                data_dev[4] = data_dev[4].to('cuda', non_blocking=True)
                 if self.__class__.__name__.startswith("Split"):
                     profile_mem = profile_mem.to('cuda', non_blocking=True)
             if profile_mem != None:
                 profile_mem = profile_mem.transpose(0,1)
-            words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
-                                        data_dev[1].transpose(0, 1), data_dev[5],
-                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7],
-                                        profile_mem)
+            words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4].transpose(0,1),
+                                                     data_dev[5], data_dev[1].transpose(0, 1), data_dev[6],
+                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[8], profile_mem)
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
             if self.from_which_enable:
@@ -279,7 +283,7 @@ class ExperimentRunnerBase(torch.nn.Module):
                 if j==0:
                     f.write("Epoch {}\n".format(epoch))
                 f.write('------------truth---------------\n\n')
-                [f.write(w + '\n') for w in data_dev[8]]
+                [f.write(w + '\n') for w in data_dev[9]]
 
                 f.write('------------response-------------\n\n')
                 [f.write(' '.join(w) + '\n') for w in transposed_words]
@@ -299,18 +303,18 @@ class ExperimentRunnerBase(torch.nn.Module):
                     else:
                         st += e + ' '
                 temp_gen.append(st)
-                correct = data_dev[8][i]
+                correct = data_dev[9][i]
                 ### compute F1 SCORE
                 st = st.lstrip().rstrip()
                 correct = correct.lstrip().rstrip()
 
-                if data_dev[6][i] not in dialog_acc_dict.keys():
-                    dialog_acc_dict[data_dev[6][i].item()] = []
+                if data_dev[7][i] not in dialog_acc_dict.keys():
+                    dialog_acc_dict[data_dev[7][i].item()] = []
                 if (correct == st):
                     acc += 1
-                    dialog_acc_dict[data_dev[6][i].item()].append(1)
+                    dialog_acc_dict[data_dev[7][i].item()].append(1)
                 else:
-                    dialog_acc_dict[data_dev[6][i].item()].append(0)
+                    dialog_acc_dict[data_dev[7][i].item()].append(0)
 
                 w += wer(correct, st)
                 ref.append(str(correct))
