@@ -192,4 +192,4 @@ def read_dataset(string, kb_entries):
             _ = w2i['t' + str(time)]
             time += 1
     # pdb.set_trace()
-    return memory, w2i
+    return memory, w2i, 0

@@ -6,6 +6,35 @@ import numpy as np
 from Encoder import Encoder
 from Decoder import Decoder
 import os.path
+
+_keys = ['gender', 'age', 'dietary', 'favorite']
+
+_attr_to_index = {
+    'gender': {'female': 0, 'male': 1},
+    'age': {'elderly': 0, 'middle-aged': 1, 'young': 2},
+    'dietary': {'non-veg': 0, 'veg': 1},
+    'favorite':
+        {'biryani': 0, 'curry': 1, 'english_breakfast': 2, 'fish_and_chips': 3, 'omlette': 4,
+         'paella': 5, 'pasta': 6, 'pizza': 7, 'ratatouille': 8, 'risotto': 9, 'shepherds_pie': 10,
+         'souffle': 11, 'tapas': 12, 'tart': 13, 'tikka': 14}
+}
+
+
+def _vectorize(attribute_values: dict):
+    n_attributes = len(attribute_values)
+
+    profile = dict(zip(_keys[:n_attributes], attribute_values))
+    result = []
+
+    for key in _keys[:n_attributes]:
+        one_hot_emb = [0] * len(_attr_to_index[key])
+        value = profile[key]
+        one_hot_emb[_attr_to_index[key][value]] = 1
+        result += one_hot_emb[:]
+
+    return result
+
+
 class Mem2SeqRunner(ExperimentRunnerBase):
     def __init__(self, args):
         super(Mem2SeqRunner, self).__init__(args)
@@ -18,7 +47,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         self.dropout = 0.2
 
         self.encoder = Encoder(self.hops, self.nwords, self.gru_size)
-        self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords)
+        self.decoder = Decoder(self.emb_size, self.hops, self.gru_size, self.nwords, profile_len=self.profile_len)
 
         self.optim_enc = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=0.001)
@@ -39,10 +68,11 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         sentinel = batch[3].transpose(0, 1)
         context_lengths = batch[4]
         target_lengths = batch[5]
-        return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, clip_grads)
+        profile_words = batch[10]
+        return self.train_batch(context, responses, index, sentinel, new_epoch, context_lengths, target_lengths, profile_words, clip_grads)
 
     def train_batch(self, context, responses, index, sentinel, new_epoch, context_lengths, target_lengths,
-                    clip_grads):
+                    profile_words, clip_grads):
 
         # (TODO): remove transpose
         if new_epoch:  # (TODO): Change this part
@@ -55,6 +85,9 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         responses = responses.type(self.TYPE)
         index = index.type(self.TYPE)
         sentinel = sentinel.type(self.TYPE)
+
+        profile_vecs = [_vectorize(words) for words in profile_words]
+        profile_encoding = torch.FloatTensor(profile_vecs)
 
         self.optim_enc.zero_grad()
         self.optim_dec.zero_grad()
@@ -71,7 +104,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             output_vocab = output_vocab.cuda()
             output_ptr = output_ptr.cuda()
         while y_len < responses.size(0):  # TODO: Add EOS condition
-            p_ptr, p_vocab, h = self.decoder(context, y, h)
+            p_ptr, p_vocab, h = self.decoder(context, y, h, profile_encoding)
             output_vocab[y_len] = p_vocab
             output_ptr[y_len] = p_ptr
             #TODO: Add teqacher forcing ratio
@@ -111,7 +144,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         return loss.item(), loss_v.item(), loss_ptr.item()
 
     def evaluate_batch(self, batch_size, input_batches, input_lengths, target_batches, target_lengths, target_index,
-                       target_gate, src_plain, profile_memory=None):
+                       target_gate, src_plain, profile_memory=None, profile_words=None):
 
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
@@ -122,6 +155,9 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
         # Prepare input and output variables
         decoder_input = Variable(torch.LongTensor([2] * batch_size))
+
+        profile_vecs = [_vectorize(words) for words in profile_words]
+        profile_encoding = torch.FloatTensor(profile_vecs)
 
         decoded_words = []
         all_decoder_outputs_vocab = Variable(torch.zeros(max(target_lengths), batch_size, self.nwords))
@@ -144,7 +180,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
         acc_gate, acc_ptr, acc_vac = 0.0, 0.0, 0.0
         # Run through decoder one time step at a time
         for t in range(max(target_lengths)):
-            decoder_ptr, decoder_vacab, decoder_hidden = self.decoder(input_batches, decoder_input, decoder_hidden)
+            decoder_ptr, decoder_vacab, decoder_hidden = self.decoder(input_batches, decoder_input, decoder_hidden, profile_encoding)
             all_decoder_outputs_vocab[t] = decoder_vacab
             topv, topvi = decoder_vacab.data.topk(1)
             all_decoder_outputs_ptr[t] = decoder_ptr

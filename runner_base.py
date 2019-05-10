@@ -48,9 +48,9 @@ class ExperimentRunnerBase(torch.nn.Module):
             data_file_prefix = self.getPersonalDataNames(args.task)
 
         self.kb_entries = find_entities(os.path.join(data_dir, "../full", kb_path))
-        train, self.w2i = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
-        dev, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
-        test, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
+        train, self.w2i, profile_len = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
+        dev, _, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
+        test, _, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
 
         self.data_train = TextDataset(train, self.w2i)
         self.data_dev = TextDataset(dev, self.w2i)
@@ -88,6 +88,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.vloss = 0
         self.acc = 0
         self.avg_best = 0
+        self.profile_len = profile_len
 
         self.train_plot_data = {
             'train': {
@@ -119,7 +120,7 @@ class ExperimentRunnerBase(torch.nn.Module):
                 self.loss_weights = self.loss_weights.cuda()
 
     def trainer(self):
-        with open(f"log-{str(datetime.datetime.now())}-{self.name}", 'w') as log_file:
+        with open(f"log-{self.name}.txt", 'w') as log_file:
             try:
                 for epoch in range(self.epochs):
                     pbar = tqdm(enumerate(self.train_data_loader), total=len(self.train_data_loader))
@@ -266,7 +267,7 @@ class ExperimentRunnerBase(torch.nn.Module):
             words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4],
                                         data_dev[1].transpose(0, 1), data_dev[5],
                                         data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[7],
-                                        profile_mem)
+                                        profile_mem, data_dev[10])
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
             if self.from_which_enable:
