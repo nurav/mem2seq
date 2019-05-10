@@ -179,7 +179,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
             top_resto_i = torch.gather(input_batches[:, :, 0], 0, Variable(topri.view(1, -1))).transpose(0, 1)
             next_in =[]
             for i in range(batch_size):
-                select_from_resto_first = True
+                select_from_resto_first = False
                 if (select_from_resto_first):
                     if topri[i].item() < input_lengths[i] - 1:
                         next_in.append(top_resto_i[i].item())
@@ -191,7 +191,7 @@ class Mem2SeqRunner(ExperimentRunnerBase):
 
                     if toppi[i].item() < input_lengths[i] - 1:
                         word = self.i2w[top_ptr_i[i].item()]
-                        if word.startswith("resto"):
+                        if word.startswith("resto_"):
                             next_in.append(top_resto_i[i].item())
                         else:
                             next_in.append(top_ptr_i[i].item())
