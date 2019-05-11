@@ -35,6 +35,21 @@ class Decoder(nn.Module):
         self.lin_vocab = nn.Linear(self.mult*2 * emb_size, self.nwords)
         self.gru = nn.GRU(self.mult*emb_size, self.mult*emb_size, dropout = self.dropout)
 
+
+        ### memory network ####
+        self.B = torch.nn.ModuleList(
+            [torch.nn.Embedding(self.nwords, self.mult * self.emb_size, padding_idx=0) for h in range(self.hops)])
+        self.B.apply(init_weights)
+        self.D = torch.nn.ModuleList(
+            [torch.nn.Embedding(self.nwords, self.mult * self.emb_size, padding_idx=0) for h in range(self.hops)])
+        self.D.apply(init_weights)
+        for i in range(self.hops - 1):
+            self.D[i].weight = self.B[i + 1].weight
+
+        # self.soft = nn.Softmax(dim=1)
+        # self.lin_vocab = nn.Linear(self.mult * 2 * emb_size, self.nwords)
+        # self.gru = nn.GRU(self.mult * emb_size, self.mult * emb_size, dropout=self.dropout)
+
     def load_memory(self, context):
         size = context.size()  # b * m * 3
 
@@ -48,36 +63,51 @@ class Decoder(nn.Module):
             context = context * a.long()
 
         self.memories = []
-        self.profile = []
+        self.memories2 = []
+
         context = context.view(size[0], -1)
         for hop in range(self.hops):
             m = self.A[hop](context)
             m = m.view(size[0], size[1], size[2], self.mult*self.emb_size)
-            self.profile.append(torch.sum(m[:,:,3:,:],2))
             m = torch.sum(m, 2)
             self.memories.append(m)
             c = self.C[hop](context)
             c = c.view(size[0], size[1], size[2], self.mult*self.emb_size)
             c = torch.sum(c, 2)
+
+            m2 = self.B[hop](context)
+            m2 = m2.view(size[0], size[1], size[2], self.mult * self.emb_size)
+            m2 = torch.sum(m2, 2)
+            self.memories2.append(m2)
+            d = self.D[hop](context)
+            d = d.view(size[0], size[1], size[2], self.mult * self.emb_size)
+            d = torch.sum(d, 2)
+
         self.memories.append(c)
+        self.memories2.append(d)
 
     def forward(self, context, y_, h_):
         m = self.C[0](y_).unsqueeze(0)  # b * e
         _, h = self.gru(m, h_)
 
         q = [h.squeeze(0)]
-        hprofile = self.profile[-1][:,0,:].unsqueeze(2)
+        q2 = [h.squeeze(0)]
         for hop in range(self.hops):
             p = torch.sum(self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop]), 2)
             attn = self.soft(p)
             o = torch.bmm(attn.unsqueeze(1), self.memories[hop + 1]).squeeze(1)
-
+            q.append(q[-1] + o)
             if hop == 0:
                 p_vocab = self.lin_vocab(torch.cat((q[0], o), 1))
-            if hop == self.hops - 1:
-                p_ = self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop])
-                p_resto = torch.bmm(p_, hprofile).squeeze(2)
-            q.append(q[-1] + o)
+
+            p2 = torch.sum(self.memories2[hop] * q2[-1].unsqueeze(1).expand_as(self.memories2[hop]), 2)
+            attn2 = self.soft(p2)
+            o2 = torch.bmm(attn2.unsqueeze(1), self.memories2[hop + 1]).squeeze(1)
+            q2.append(q2[-1] + o2)
+
+
+
 
         p_ptr = p
+        p_resto = p2
         return p_ptr, p_vocab, p_resto, h
