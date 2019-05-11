@@ -27,7 +27,6 @@ class ExperimentRunnerBase(torch.nn.Module):
         if self.use_cuda:
             self.TYPE = torch.cuda.LongTensor
             self.TYPEF = torch.cuda.FloatTensor
-
         if data == "babi":
             from data_babi import find_entities, read_dataset, TextDataset, collate_fn
             data_dir = "data/dialog-bAbI-tasks"
@@ -49,9 +48,9 @@ class ExperimentRunnerBase(torch.nn.Module):
             data_file_prefix = self.getPersonalDataNames(args.task)
 
         self.kb_entries = find_entities(os.path.join(data_dir, "../full", kb_path))
-        train, self.w2i = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
-        dev, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
-        test, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
+        train, self.w2i, profile_len = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-trn.txt"), self.kb_entries))
+        dev, _, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-dev.txt"), self.kb_entries))
+        test, _, _ = list(read_dataset(os.path.join(data_dir, f"{data_file_prefix}-tst.txt"), self.kb_entries))
 
         self.data_train = TextDataset(train, self.w2i)
         self.data_dev = TextDataset(dev, self.w2i)
@@ -79,7 +78,6 @@ class ExperimentRunnerBase(torch.nn.Module):
                                                             pin_memory=True,
                                                             num_workers=5)
 
-
         self.args = args
         self.nwords = len(self.w2i)
         self.cross_entropy = torch.nn.CrossEntropyLoss()
@@ -89,6 +87,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.vloss = 0
         self.acc = 0
         self.avg_best = 0
+        self.profile_len = profile_len
 
         self.train_plot_data = {
             'train': {
@@ -131,8 +130,10 @@ class ExperimentRunnerBase(torch.nn.Module):
                             batch[2] = batch[2].to('cuda', non_blocking=True)
                             batch[3] = batch[3].to('cuda', non_blocking=True)
                             batch[4] = batch[4].to('cuda', non_blocking=True)
-                            if self.__class__.__name__.startswith("Split"):
-                                batch[10] = batch[10].to('cuda', non_blocking=True)
+                            batch[6] = batch[6].to('cuda', non_blocking=True)
+                            batch[10] = batch[10].to('cuda', non_blocking=True)
+                            #if self.__class__.__name__.startswith("Split"):
+                            #    batch[10] = batch[10].to('cuda', non_blocking=True)
                         self.train()
                         loss, vloss, ploss = self.train_batch_wrapper(batch, i == 0, 8)
                         pbar.set_description(self.print_loss())
@@ -210,6 +211,7 @@ class ExperimentRunnerBase(torch.nn.Module):
         self.loss = 0
         self.ploss = 0
         self.vloss = 0
+        self.rloss = 0
         self.n = 1
 
         self.incorrect_sentinel = 0
@@ -266,13 +268,14 @@ class ExperimentRunnerBase(torch.nn.Module):
                 data_dev[2] = data_dev[2].to('cuda', non_blocking=True)
                 data_dev[3] = data_dev[3].to('cuda', non_blocking=True)
                 data_dev[4] = data_dev[4].to('cuda', non_blocking=True)
-                if self.__class__.__name__.startswith("Split"):
-                    profile_mem = profile_mem.to('cuda', non_blocking=True)
+                data_dev[10] = data_dev[10].to('cuda', non_blocking=True)
+                #if self.__class__.__name__.startswith("Split"):
+                #    profile_mem = profile_mem.to('cuda', non_blocking=True)
             if profile_mem != None:
                 profile_mem = profile_mem.transpose(0,1)
             words, from_whichs = self.evaluate_batch(len(data_dev[1]), data_dev[0].transpose(0, 1), data_dev[4].transpose(0,1),
                                                      data_dev[5], data_dev[1].transpose(0, 1), data_dev[6],
-                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[8], profile_mem)
+                                        data_dev[2].transpose(0, 1), data_dev[3].transpose(0, 1), data_dev[8], profile_mem, data_dev[10])
 
             transposed_words = [[row[i] for row in words] for i in range(len(words[0]))]
             if self.from_which_enable:

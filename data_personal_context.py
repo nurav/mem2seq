@@ -16,6 +16,7 @@ class TextDataset(Dataset):
     def preprocess(self):
         """ performs word to index conversion for every element
                 """
+        self.processed_context = [[] for _ in range(len(self.memory))]
         for idx in range(len(self.memory)):
             # pdb.set_trace()
             m = self.memory[idx]
@@ -41,15 +42,15 @@ class TextDataset(Dataset):
             resto_idx_seq.append(len(context_seq) -1)
             gate_seq.append(False)
             #resto_seq.append(False)
-            m.append(new_context_seq)
-            m.append(new_bot_seq)
+            self.processed_context[idx].append(new_context_seq)
+            self.processed_context[idx].append(new_bot_seq)
 
     def __len__(self):
         return len(self.memory)
 
     def __getitem__(self, idx):
-        return self.memory[idx][6], self.memory[idx][7], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4],\
-               self.memory[idx][5], self.memory[idx][0], self.memory[idx][1]
+        return self.processed_context[idx][0], self.processed_context[idx][1], self.memory[idx][2], self.memory[idx][3], self.memory[idx][4],\
+               self.memory[idx][5], self.memory[idx][0], self.memory[idx][1], self.memory[idx][6]
 
 
 def collate_fn(batch):
@@ -70,6 +71,7 @@ def collate_fn(batch):
     dialog_idxs = [np.array(x[5]) for x in batch]
     context_words = [x[6] for x in batch]
     target_words = [x[7] for x in batch]
+    profile_words = [x[8] for x in batch]
 
     out_context = np.zeros((len(batch), max_len_context, profile_len + 3), dtype=int)
     out_target = np.zeros((len(batch), max_len_target), dtype=np.int64)
@@ -87,7 +89,7 @@ def collate_fn(batch):
         out_dialog_idxs[i] = dialog_idxs[i]
 
     return torch.from_numpy(out_context), torch.from_numpy(out_target), torch.from_numpy(out_index), torch.from_numpy(
-        out_gate), torch.from_numpy(out_resto), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words
+        out_gate), torch.from_numpy(out_resto), context_lengths, target_lengths, out_dialog_idxs, context_words, target_words, profile_words
 
 
 def find_entities(filename):
@@ -116,6 +118,7 @@ def read_dataset(string, kb_entries):
     bytez = str(bytez, 'utf-8')
     memory = []
     context = []
+    profile_memory_words = []
     time = 1
     w2i = defaultdict(lambda: len(w2i))
     t2i = defaultdict(lambda: len(t2i))
@@ -143,6 +146,7 @@ def read_dataset(string, kb_entries):
         elif '\t' not in line:
             if line.split(' ')[0] == '1':
                 temp = line.split(' ')[1:]
+                profile_memory_words = [word for word in line.split(' ')[1:]]
                 tmp_profile_len = 0
 
                 for w in temp:
@@ -202,8 +206,7 @@ def read_dataset(string, kb_entries):
             context_new = context.copy()
 
             context_new.extend([['$$$$'] * (profile_len + 3)])
-
-            memory.append([context_new, bot, idx, sentinel, resto_idx, dialog_idx])  ##### final output
+            memory.append([context_new, bot, idx, sentinel, resto_idx, dialog_idx, profile_memory_words])  ##### final output
 
             context.extend([[word, '$s', 't' + str(time)]+current_profile for word in bot.split(' ')])
 
@@ -212,6 +215,35 @@ def read_dataset(string, kb_entries):
 
             _ = w2i['t' + str(time)]
             time += 1
-    return memory, w2i
+    return memory, w2i, len(_vectorize(profile_memory_words))
+
+_keys = ['gender', 'age', 'dietary', 'favorite']
+
+_attr_to_index = {
+    'gender': {'female': 0, 'male': 1},
+    'age': {'elderly': 0, 'middle-aged': 1, 'young': 2},
+    'dietary': {'non-veg': 0, 'veg': 1},
+    'favorite':
+        {'biryani': 0, 'curry': 1, 'english_breakfast': 2, 'fish_and_chips': 3, 'omlette': 4,
+         'paella': 5, 'pasta': 6, 'pizza': 7, 'ratatouille': 8, 'risotto': 9, 'shepherds_pie': 10,
+         'souffle': 11, 'tapas': 12, 'tart': 13, 'tikka': 14}
+}
+
+
+def _vectorize(attribute_values: dict):
+    n_attributes = len(attribute_values)
+
+    profile = dict(zip(_keys[:n_attributes], attribute_values))
+    result = []
+
+    for key in _keys[:n_attributes]:
+        one_hot_emb = [0] * len(_attr_to_index[key])
+        value = profile[key]
+        one_hot_emb[_attr_to_index[key][value]] = 1
+        result += one_hot_emb[:]
+
+    return result
+
+
 
 

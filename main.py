@@ -43,6 +43,11 @@ if __name__ == "__main__":
 
 
     runner_class = runner(args)
-
+    if args.load_from:
+        runner_class.load_models(args.load_from)
+    if args.test:
+        runner_class.eval()
+        acc = runner_class.evaluate(runner_class.test_data_loader, 0, runner_class.kb_entries, runner_class.i2w, "Test")
+        exit(0)
     runner_class.trainer()
 

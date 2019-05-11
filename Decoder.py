@@ -6,7 +6,7 @@ use_cuda = torch.cuda.is_available()
 
 class Decoder(nn.Module):
     # def __init__(self, vocab, embedding_dim, hop, dropout, unk_mask):
-    def __init__(self, emb_size, hops, gru_size, nwords, hidden=False):
+    def __init__(self, emb_size, hops, gru_size, nwords, hidden=False, profile_len=None):
 
         super(Decoder, self).__init__()
         self.nwords = nwords
@@ -32,6 +32,9 @@ class Decoder(nn.Module):
             self.C[i].weight = self.A[i + 1].weight
 
         self.soft = nn.Softmax(dim=1)
+
+        if profile_len is not None:
+            self.profile_encoder = nn.Linear(profile_len, emb_size)
         self.lin_vocab = nn.Linear(self.mult*2 * emb_size, self.nwords)
         self.gru = nn.GRU(self.mult*emb_size, self.mult*emb_size, dropout = self.dropout)
 
@@ -48,12 +51,10 @@ class Decoder(nn.Module):
             context = context * a.long()
 
         self.memories = []
-        self.profile = []
         context = context.view(size[0], -1)
         for hop in range(self.hops):
             m = self.A[hop](context)
             m = m.view(size[0], size[1], size[2], self.mult*self.emb_size)
-            self.profile.append(torch.sum(m[:,:,3:,:],2))
             m = torch.sum(m, 2)
             self.memories.append(m)
             c = self.C[hop](context)
@@ -61,23 +62,26 @@ class Decoder(nn.Module):
             c = torch.sum(c, 2)
         self.memories.append(c)
 
-    def forward(self, context, y_, h_):
+    def forward(self, context, y_, h_, profile_encoding=None):
         m = self.C[0](y_).unsqueeze(0)  # b * e
         _, h = self.gru(m, h_)
 
         q = [h.squeeze(0)]
-        hprofile = self.profile[-1][:,0,:].unsqueeze(2)
         for hop in range(self.hops):
-            p = torch.sum(self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop]), 2)
+            p_ = self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop])
+            p = torch.sum(p_, 2)
             attn = self.soft(p)
             o = torch.bmm(attn.unsqueeze(1), self.memories[hop + 1]).squeeze(1)
 
             if hop == 0:
                 p_vocab = self.lin_vocab(torch.cat((q[0], o), 1))
-            if hop == self.hops - 1:
-                p_ = self.memories[hop] * q[-1].unsqueeze(1).expand_as(self.memories[hop])
-                p_resto = torch.bmm(p_, hprofile).squeeze(2)
+
             q.append(q[-1] + o)
+            if hop == 1:
+                if profile_encoding is not None:
+                    pr = torch.bmm(p_, self.profile_encoder(profile_encoding).unsqueeze(2))
+                    p_resto = pr.squeeze(2)
+
 
         p_ptr = p
         return p_ptr, p_vocab, p_resto, h
